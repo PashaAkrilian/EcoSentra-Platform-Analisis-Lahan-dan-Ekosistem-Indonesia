@@ -1,4 +1,4 @@
-# EcoSentra: Platform Analisis Lahan dan Ekosistem Indonesia
+# EcoSentra: Platform Analisis Lahan dan Ekosistem Indonesia 
 
 [![Status Deploy](https://img.shields.io/badge/deploy-live-brightgreen.svg)](https://ecosentra.web.app)
 
