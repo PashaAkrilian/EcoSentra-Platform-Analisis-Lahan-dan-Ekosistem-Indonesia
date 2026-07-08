@@ -10,14 +10,9 @@
     previews = {
       web = {
         command = [
-          "npm"
-          "run"
-          "dev"
-          "--"
-          "--port"
-          "$PORT"
-          "--hostname"
-          "0.0.0.0"
+          "bash"
+          "-c"
+          "cd apps/web && npm run dev -- --port $PORT --hostname 0.0.0.0"
         ];
         manager = "web";
       };

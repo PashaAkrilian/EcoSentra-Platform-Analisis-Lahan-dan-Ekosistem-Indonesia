@@ -1,8 +1,9 @@
 # Dependencies
-/node_modules
+node_modules
 
 # Build directory
-/.next/
+.next/
+*.tsbuildinfo
 
 # Local Environment Variables
 .env.local

@@ -6,19 +6,16 @@ pengembangan EcoSentra (solo development, mengikuti pola industri
 
 ## Struktur Proyek
 
-Saat ini repo masih berupa satu aplikasi Next.js flat (`app/`, `app/api/`,
-`components/`, `lib/`, dst di root repo). Arah pengembangan ke depan adalah
-memecah menjadi monorepo dengan struktur berikut (**target/rencana**, belum
-dibuat):
+Repo ini adalah monorepo dengan struktur:
 
-- `apps/web` — Frontend (Next.js/TypeScript)
-- `apps/web/app/api` — Backend API utama (Next.js API Routes)
-- `services/ml` — Layanan ML (FastAPI/Python)
-- `services/mcp` — MCP server (Python)
+- `apps/web` — Frontend (Next.js/TypeScript) & Backend API utama (Next.js API Routes di `apps/web/app/api`)
+- `services/ml` — Layanan ML (FastAPI/Python) — *placeholder, belum ada kode*
+- `services/mcp` — MCP server (Python) — *placeholder, belum ada kode*
 
 Konvensi penamaan branch di bawah ini mengacu ke **domain fitur**
-(frontend/backend/ml/mcp), bukan ke path folder — jadi konvensi ini sudah
-berlaku sekarang, bahkan sebelum struktur folder di atas benar-benar dibuat.
+(frontend/backend/ml/mcp), bukan ke path folder secara ketat — jadi konvensi
+ini tetap berlaku meski `services/ml` dan `services/mcp` masih kosong sampai
+diisi lewat branch `feature/ml-*` / `feature/mcp-*` masing-masing.
 
 ## Diagram Alur Branch
 
@@ -49,6 +46,7 @@ feature/mcp-*                      ●───●
 | `feature/mcp-*` | MCP server (Python)              | `feature/mcp-query-tool`        |
 | `bugfix/*`      | Perbaikan bug                    | `bugfix/fix-map-marker-crash`   |
 | `docs/*`        | Dokumentasi                      | `docs/update-readme-setup`      |
+| `chore/*`       | Infra/restrukturisasi lintas-domain (bukan fitur/bug/docs) | `chore/restructure-monorepo` |
 
 ## Alur Kerja Standar Mengerjakan Fitur
 
