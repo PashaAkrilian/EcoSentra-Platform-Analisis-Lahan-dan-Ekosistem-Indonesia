@@ -1,6 +1,6 @@
 // app/api/chatSessions/route.ts
 import { NextResponse } from 'next/server';
-import { firestore, FieldValue } from '@/config/firebaseAdmin';
+import { firestore, FieldValue } from '@/server/firebaseAdmin';
 
 export async function GET() {
   try {

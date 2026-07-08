@@ -1,4 +1,4 @@
-// config/firebaseClient.ts
+// lib/firebaseClient.ts
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getFirestore, Firestore } from 'firebase/firestore';
 
