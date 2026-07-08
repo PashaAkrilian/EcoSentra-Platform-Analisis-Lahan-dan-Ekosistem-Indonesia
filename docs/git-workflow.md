@@ -17,6 +17,21 @@ Konvensi penamaan branch di bawah ini mengacu ke **domain fitur**
 ini tetap berlaku meski `services/ml` dan `services/mcp` masih kosong sampai
 diisi lewat branch `feature/ml-*` / `feature/mcp-*` masing-masing.
 
+### Struktur di dalam `apps/web`
+
+Meski frontend dan backend berbagi satu Next.js app (konsekuensi dari App
+Router — API routes harus di `app/api/*`), file-file di dalamnya sudah
+dipisah jelas menurut domain:
+
+- **Backend**: `app/api/**` (route handler) + `server/**` (kode server-only,
+  mis. `server/firebaseAdmin.ts`). Kode di `server/` memakai Firebase Admin
+  SDK dan env var tanpa prefix `NEXT_PUBLIC_` — **jangan pernah** diimport
+  dari file yang punya `'use client'`.
+- **Frontend**: `app/**` (pages & layout, di luar `app/api`) + `components/**`
+  + `hooks/**` + `lib/**` (termasuk `lib/firebaseClient.ts` untuk Firebase
+  client SDK di browser).
+- **Shared**: `public/**` (aset statis).
+
 ## Diagram Alur Branch
 
 ```

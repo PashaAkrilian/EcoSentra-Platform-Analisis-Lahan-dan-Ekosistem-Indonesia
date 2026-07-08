@@ -1,4 +1,4 @@
-// config/firebaseAdmin.ts
+// server/firebaseAdmin.ts
 import * as admin from 'firebase-admin';
 
 // Ensure required environment variables are set.
