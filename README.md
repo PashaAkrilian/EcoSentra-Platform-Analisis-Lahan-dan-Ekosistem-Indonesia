@@ -1,4 +1,4 @@
-# EcoSentra: Platform Analisis Lahan dan Ekosistem Indonesia
+# EcoSentra: Platform Analisis Lahan dan Ekosistem Indonesia 
 
 [![Status Deploy](https://img.shields.io/badge/deploy-live-brightgreen.svg)](https://ecosentra.web.app)
 
@@ -24,6 +24,16 @@
 -   **Database:** Google Cloud Firestore
 -   **Hosting:** Firebase Hosting
 
+## Struktur Repo
+
+Repo ini adalah monorepo:
+
+-   `apps/web` — Frontend (Next.js/TypeScript) & Backend API utama (Next.js API Routes di `apps/web/app/api`)
+-   `services/ml` — Layanan ML (FastAPI/Python) — *placeholder, belum ada kode*
+-   `services/mcp` — MCP server (Python) — *placeholder, belum ada kode*
+
+Lihat [`docs/git-workflow.md`](./docs/git-workflow.md) untuk strategi branching dan alur kerja kontribusi.
+
 ## Cara Menjalankan Proyek Secara Lokal
 
 Untuk developer yang ingin berkontribusi atau menjalankan proyek ini di mesin lokal.
@@ -31,7 +41,7 @@ Untuk developer yang ingin berkontribusi atau menjalankan proyek ini di mesin lo
 1.  **Clone repositori ini:**
     ```bash
     git clone https://github.com/PashaAkrilian/Gemastik-2025.git
-    cd Gemastik-2025
+    cd Gemastik-2025/apps/web
     ```
 
 2.  **Install dependensi:**

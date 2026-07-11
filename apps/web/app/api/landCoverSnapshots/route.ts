@@ -1,6 +1,6 @@
 // app/api/landCoverSnapshots/route.ts
 import { NextResponse } from 'next/server';
-import { firestore, FieldValue } from '@/config/firebaseAdmin';
+import { firestore, FieldValue } from '@/server/firebaseAdmin';
 import { CollectionReference, DocumentData, Query } from 'firebase-admin/firestore';
 
 export async function GET(request: Request) {

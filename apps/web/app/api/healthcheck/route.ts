@@ -1,6 +1,6 @@
 // app/api/healthcheck/route.ts
 import { NextResponse } from 'next/server';
-import { firestore } from '@/config/firebaseAdmin';
+import { firestore } from '@/server/firebaseAdmin';
 
 export async function GET() {
   try {
