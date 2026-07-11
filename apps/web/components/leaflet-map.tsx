@@ -25,6 +25,91 @@ declare global {
   }
 }
 
+// Di bawah zoom ini, kota-kota (terutama yang berdekatan di Jawa) akan
+// bertumpuk kalau label penuh ditampilkan -> tampilkan titik kecil saja.
+const CITY_LABEL_MIN_ZOOM = 7
+
+function buildCityIcon(city: { name: string; type: string }, zoom: number) {
+  let cityColor = "#1f2937"
+  let citySize = "11px"
+  let cityIcon = "🏙️"
+
+  switch (city.type) {
+    case "capital":
+      cityColor = "#dc2626"
+      citySize = "13px"
+      cityIcon = "🏛️"
+      break
+    case "major":
+      cityColor = "#2563eb"
+      citySize = "12px"
+      cityIcon = "🏙️"
+      break
+    case "cultural":
+      cityColor = "#7c3aed"
+      cityIcon = "🏛️"
+      break
+    case "tourism":
+      cityColor = "#059669"
+      cityIcon = "🏖️"
+      break
+    default:
+      cityColor = "#374151"
+      cityIcon = "🏘️"
+  }
+
+  if (zoom < CITY_LABEL_MIN_ZOOM) {
+    // Zoom out: titik kecil saja, tanpa label, supaya kota-kota berdekatan
+    // (mis. Jakarta-Bandung-Semarang-Surabaya-Yogyakarta) tidak bertumpuk.
+    return window.L.divIcon({
+      className: "city-marker",
+      html: `<div style="
+        background: ${cityColor};
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        border: 2px solid white;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+      "></div>`,
+      iconSize: [10, 10],
+      iconAnchor: [5, 5],
+    })
+  }
+
+  return window.L.divIcon({
+    className: "city-marker",
+    html: `
+      <div style="
+        background: linear-gradient(135deg, ${cityColor} 0%, ${cityColor}dd 100%);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: ${citySize};
+        font-weight: bold;
+        border: 2px solid white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        white-space: nowrap;
+        position: relative;
+      ">
+        ${cityIcon} ${city.name}
+        <div style="
+          position: absolute;
+          bottom: -6px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 0;
+          height: 0;
+          border-left: 4px solid transparent;
+          border-right: 4px solid transparent;
+          border-top: 4px solid ${cityColor};
+        "></div>
+      </div>
+    `,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  })
+}
+
 export default function LeafletMap({ selectedLayer, fireData, onMapClick }: LeafletMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
@@ -129,7 +214,18 @@ export default function LeafletMap({ selectedLayer, fireData, onMapClick }: Leaf
 
     // Add zoom handler
     map.on("zoomend", () => {
-      setCurrentZoom(map.getZoom())
+      const zoom = map.getZoom()
+      setCurrentZoom(zoom)
+
+      // Ganti ikon tiap kota (pill berlabel <-> titik kecil) sesuai zoom,
+      // tanpa perlu membuat ulang seluruh layer marker.
+      if (layerGroupsRef.current.cities) {
+        layerGroupsRef.current.cities.eachLayer((marker: any) => {
+          if (marker.cityData) {
+            marker.setIcon(buildCityIcon(marker.cityData, zoom))
+          }
+        })
+      }
     })
 
     // Add Indonesian cities
@@ -258,22 +354,19 @@ export default function LeafletMap({ selectedLayer, fireData, onMapClick }: Leaf
     ]
 
     const cityGroup = window.L.layerGroup()
+    const initialZoom = map.getZoom()
 
     indonesianCities.forEach((city) => {
-      // Different styling based on city type
+      // Warna/ikon dipakai lagi di popup di bawah -> hitung sekali di sini.
       let cityColor = "#1f2937"
-      let citySize = "11px"
       let cityIcon = "🏙️"
-
       switch (city.type) {
         case "capital":
           cityColor = "#dc2626"
-          citySize = "13px"
           cityIcon = "🏛️"
           break
         case "major":
           cityColor = "#2563eb"
-          citySize = "12px"
           cityIcon = "🏙️"
           break
         case "cultural":
@@ -290,39 +383,11 @@ export default function LeafletMap({ selectedLayer, fireData, onMapClick }: Leaf
       }
 
       const marker = window.L.marker([city.lat, city.lng], {
-        icon: window.L.divIcon({
-          className: "city-marker",
-          html: `
-            <div style="
-              background: linear-gradient(135deg, ${cityColor} 0%, ${cityColor}dd 100%); 
-              color: white; 
-              padding: 4px 8px; 
-              border-radius: 12px; 
-              font-size: ${citySize}; 
-              font-weight: bold;
-              border: 2px solid white;
-              box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-              white-space: nowrap;
-              position: relative;
-            ">
-              ${cityIcon} ${city.name}
-              <div style="
-                position: absolute;
-                bottom: -6px;
-                left: 50%;
-                transform: translateX(-50%);
-                width: 0;
-                height: 0;
-                border-left: 4px solid transparent;
-                border-right: 4px solid transparent;
-                border-top: 4px solid ${cityColor};
-              "></div>
-            </div>
-          `,
-          iconSize: [0, 0],
-          iconAnchor: [0, 0],
-        }),
+        icon: buildCityIcon(city, initialZoom),
       })
+      // Disimpan supaya handler zoomend bisa membangun ulang ikon yang tepat
+      // tanpa perlu menyimpan/mencari ulang data kota dari tempat lain.
+      marker.cityData = city
 
       marker.bindPopup(`
         <div style="text-align: center; padding: 12px; min-width: 220px;">
