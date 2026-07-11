@@ -6,6 +6,11 @@
 
 # Local Environment Variables
 .env.local
+.env
+
+# Credentials / service account keys — never commit
+credentials/
+*.serviceaccount.json
 
 # Firebase
 .firebase
