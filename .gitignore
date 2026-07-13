@@ -31,6 +31,10 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# ML experiment weights (experiments/**/model/**) — file besar, jangan masuk Git
+*.pth
+*.safetensors
+
 # Misc
 .DS_Store
 *.pem
