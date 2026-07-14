@@ -12,9 +12,17 @@ node_modules
 .env.local
 .env
 
-# Credentials / service account keys — never commit
+# Credentials / service account keys — never commit.
+# Aturan utama: taruh file kunci apa pun di dalam folder credentials/.
+# Pola nama file di bawah ini jaring pengaman tambahan kalau ada yang
+# taruh file kunci di luar folder credentials/ (mis. hasil download
+# default dari Firebase/GCP Console).
 credentials/
-*.serviceaccount.json
+*.pem
+*.key
+*serviceaccount*.json
+*service-account*.json
+*firebase-adminsdk*.json
 
 # Firebase
 .firebase
@@ -25,16 +33,15 @@ venv/
 __pycache__/
 *.pyc
 
+# ML experiment weights (experiments/**/model/**) — file besar, jangan masuk Git
+*.pth
+*.safetensors
+
 # Log files
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# ML experiment weights (experiments/**/model/**) — file besar, jangan masuk Git
-*.pth
-*.safetensors
-
 # Misc
 .DS_Store
-*.pem

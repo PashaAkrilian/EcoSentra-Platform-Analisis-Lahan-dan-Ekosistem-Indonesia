@@ -1,6 +1,7 @@
 // app/api/chatSessions/[sessionId]/messages/route.ts
 import { NextResponse } from 'next/server';
 import { firestore, FieldValue } from '@/server/firebaseAdmin';
+import { parseJsonBody } from '@/lib/validation';
 
 export async function GET(request: Request, { params }: { params: { sessionId: string } }) {
   const { sessionId } = params;
@@ -18,10 +19,18 @@ export async function GET(request: Request, { params }: { params: { sessionId: s
 export async function POST(request: Request, { params }: { params: { sessionId: string } }) {
   const { sessionId } = params;
 
+  if (!sessionId || sessionId.length > 200) {
+    return NextResponse.json({ message: 'sessionId tidak valid' }, { status: 400 });
+  }
+
+  const parsed = await parseJsonBody(request);
+  if (!parsed.success) {
+    return NextResponse.json({ message: parsed.message }, { status: parsed.status });
+  }
+
   try {
-    const body = await request.json();
     const newMessage = {
-      ...body,
+      ...parsed.data,
       createdAt: FieldValue.serverTimestamp(),
     };
     const docRef = await firestore.collection('chatSessions').doc(sessionId).collection('messages').add(newMessage);
