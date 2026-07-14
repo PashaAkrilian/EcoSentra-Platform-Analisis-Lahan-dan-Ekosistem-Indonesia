@@ -2,3 +2,4 @@ earthengine-api
 python-dotenv
 fastapi
 uvicorn[standard]
+slowapi
