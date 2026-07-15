@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: [develop, staging, main]
+
+jobs:
+  frontend:
+    name: Frontend Lint & Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        # Non-blocking untuk sekarang: repo ini punya beberapa error ESLint
+        # lama (mis. react/no-unescaped-entities) yang belum diperbaiki dan
+        # bukan bagian dari setup CI ini. Tetap dijalankan supaya kelihatan
+        # di log, tapi tidak menggagalkan pipeline.
+        run: npm run lint
+        continue-on-error: true
+
+      - name: Type-check
+        # Non-blocking untuk sekarang: ada error TypeScript lama di
+        # components/ui/chart.tsx (kemungkinan mismatch versi recharts) yang
+        # sengaja disembunyikan lewat next.config.mjs (typescript.ignoreBuildErrors).
+        # Dijalankan supaya kelihatan di log, tidak menggagalkan pipeline.
+        run: npx tsc --noEmit
+        continue-on-error: true
+
+      - name: Build
+        run: npm run build
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+
+      # TODO: tambahkan step test di sini setelah Fase 4 (testing) selesai.
+      # Belum ada test suite di apps/web sama sekali saat ini.
+
+  # services/ml, services/geo, services/mcp BELUM ditambahkan sebagai job:
+  # belum ada requirements.txt/kode yang bisa di-install & di-build di branch
+  # `develop`. Kode masing-masing sudah ada di feature branch terpisah
+  # (feature/ml-segformer-run-01, feature/be-landcover-gee,
+  # feature/mcp-landcover) tapi belum merge. Tambahkan job baru di sini
+  # setelah salah satunya merge - lihat docs/ci-cd.md untuk contoh polanya.
