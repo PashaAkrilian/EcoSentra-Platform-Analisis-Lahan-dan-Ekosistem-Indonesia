@@ -1,0 +1,1 @@
+{"repos": [{"repoId": "nvidia/segformer-b0-finetuned-ade-512-512", "repoType": "model", "commitHash": "489d5cd81a0b59fab9b7ea758d3548ebe99677da", "filePaths": ["config.json", "model.safetensors"]}]}

@@ -1,13 +1,14 @@
 // app/api/fields/route.ts
 import { NextResponse } from 'next/server';
 import { firestore, FieldValue } from '@/server/firebaseAdmin';
+import { parseJsonBody } from '@/lib/validation';
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const userId = searchParams.get('userId');
 
-  if (!userId) {
-    return NextResponse.json({ message: 'userId is required' }, { status: 400 });
+  if (!userId || userId.length > 200) {
+    return NextResponse.json({ message: 'userId is required and must be a reasonable length' }, { status: 400 });
   }
 
   try {
@@ -21,10 +22,14 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const parsed = await parseJsonBody(request);
+  if (!parsed.success) {
+    return NextResponse.json({ message: parsed.message }, { status: parsed.status });
+  }
+
   try {
-    const body = await request.json();
     const newField = {
-      ...body,
+      ...parsed.data,
       createdAt: FieldValue.serverTimestamp(),
     };
     const docRef = await firestore.collection('fields').add(newField);

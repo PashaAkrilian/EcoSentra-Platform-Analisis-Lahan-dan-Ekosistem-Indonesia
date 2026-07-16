@@ -5,11 +5,37 @@ node_modules
 .next/
 *.tsbuildinfo
 
+# Editor
+.vscode/
+
 # Local Environment Variables
 .env.local
+.env
+
+# Credentials / service account keys — never commit.
+# Aturan utama: taruh file kunci apa pun di dalam folder credentials/.
+# Pola nama file di bawah ini jaring pengaman tambahan kalau ada yang
+# taruh file kunci di luar folder credentials/ (mis. hasil download
+# default dari Firebase/GCP Console).
+credentials/
+*.pem
+*.key
+*serviceaccount*.json
+*service-account*.json
+*firebase-adminsdk*.json
 
 # Firebase
 .firebase
+
+# Python (services/ml, services/mcp, services/geo)
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# ML experiment weights (experiments/**/model/**) — file besar, jangan masuk Git
+*.pth
+*.safetensors
 
 # Log files
 npm-debug.log*
@@ -19,4 +45,3 @@ pnpm-debug.log*
 
 # Misc
 .DS_Store
-*.pem
