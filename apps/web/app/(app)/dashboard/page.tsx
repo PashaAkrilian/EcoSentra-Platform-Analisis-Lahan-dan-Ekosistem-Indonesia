@@ -1,331 +1,369 @@
 "use client"
 
-import type { ReactNode } from "react"
-import { useState, useEffect } from "react"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
-import {
-  Leaf,
-  LayoutDashboard,
-  MapPin,
-  Settings,
-  HelpCircle,
-  Home,
-  Map,
-  AlertTriangle,
-  TreePine,
-  Brain,
-  Layers,
-  Flame,
-  Upload,
-  MessageCircle,
-} from "lucide-react"
+import { useMemo } from "react"
 import Link from "next/link"
-import { AskLandAI } from "@/components/ask-land-ai"
-import { useDashboardStat } from "@/hooks/use-dashboard-stat"
-import { getFieldsSummary, getLandCoverStats, getFireHotspotCount, getActiveAlertsCount } from "@/lib/data"
+import { Activity, ArrowRight, Flame, LogIn, MapPin, Sprout, TriangleAlert } from "lucide-react"
+import { useAuth } from "@/components/auth-provider"
+import { BarList } from "@/components/charts/bar-list"
+import { ChartTable, ENTITY_COLORS } from "@/components/charts/chart-utils"
+import { ColumnChart, type ColumnDatum } from "@/components/charts/column-chart"
+import { Sparkline } from "@/components/charts/sparkline"
+import { PageContainer, PageHeader } from "@/components/page-header"
+import { EmptyState, ErrorState, LoadingLines, SeverityBadge, SourceNote, StatTile } from "@/components/status"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
+import { useApi } from "@/hooks/use-api"
+import { adminAlerts, fireAlerts, mapLink, quakeAlerts, sortAlerts } from "@/lib/alerts"
+import type { Alert, EarthquakesResponse, Field, HotspotSummary } from "@/lib/data/types"
+import { formatDate, formatDateTime, formatNumber, formatRelative } from "@/lib/format"
 
-function StatCard({
-  icon,
-  iconBg,
-  label,
-  isLoading,
-  error,
-  onRetry,
-  subtitle,
-  children,
-}: {
-  icon: ReactNode
-  iconBg: string
-  label: string
-  isLoading: boolean
-  error: string | null
-  onRetry: () => void
-  subtitle?: ReactNode
-  children: ReactNode
-}) {
-  return (
-    <Card className="bg-white/80 backdrop-blur-sm shadow-xl border border-white/50">
-      <CardContent className="p-6">
-        <div className="flex items-center justify-between">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-600">{label}</p>
-            {isLoading ? (
-              <Skeleton className="h-9 w-24 mt-1" />
-            ) : error ? (
-              <div className="mt-1">
-                <p className="text-sm text-red-600">Gagal memuat data</p>
-                <button onClick={onRetry} className="text-xs text-blue-600 underline mt-1">
-                  Coba lagi
-                </button>
-              </div>
-            ) : (
-              <>
-                <p className="text-3xl font-bold text-gray-800">{children}</p>
-                {subtitle && <p className="text-xs text-gray-500 mt-1">{subtitle}</p>}
-              </>
-            )}
-          </div>
-          <div className={`p-3 rounded-full shrink-0 ${iconBg}`}>{icon}</div>
-        </div>
-      </CardContent>
-    </Card>
-  )
+function shortDay(date: string) {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString("id-ID", { day: "numeric", month: "short", timeZone: "UTC" })
 }
 
-export default function Dashboard() {
-  const [currentTime, setCurrentTime] = useState(new Date())
+export default function DashboardPage() {
+  const { configured, user } = useAuth()
+  const fires24h = useApi<HotspotSummary>("/api/hotspots/summary?range=24h")
+  const fires7d = useApi<HotspotSummary>("/api/hotspots/summary?range=7d")
+  const quakes = useApi<EarthquakesResponse>("/api/earthquakes")
+  const curated = useApi<{ configured: boolean; alerts: Alert[] }>("/api/alerts")
+  const fields = useApi<Field[]>(user ? "/api/fields" : null, { auth: true })
 
-  useEffect(() => {
-    const timer = setInterval(() => setCurrentTime(new Date()), 1000)
-    return () => clearInterval(timer)
-  }, [])
-
-  const formatDate = (date: Date) => {
-    const days = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"]
-    const months = [
-      "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-      "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+  const alerts = useMemo(() => {
+    const derived = [
+      ...(fires24h.data ? fireAlerts(fires24h.data) : []),
+      ...(quakes.data ? quakeAlerts([...quakes.data.recent, ...quakes.data.felt]) : []),
+      ...(curated.data ? adminAlerts(curated.data.alerts.filter((a) => a.status !== "selesai")) : []),
     ]
-    return {
-      dayName: days[date.getDay()],
-      fullDate: `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`,
-      time: date.toLocaleTimeString("id-ID", { hour12: false }),
-    }
-  }
+    return sortAlerts(derived.filter((a) => a.status !== "selesai"))
+  }, [fires24h.data, quakes.data, curated.data])
 
-  const dateInfo = formatDate(currentTime)
+  const dailyData: ColumnDatum[] = useMemo(() => {
+    const days = fires7d.data?.byDay ?? []
+    return days.map((d, i) => {
+      // Rentang 7 hari bergulir: hari pertama & terakhir belum lengkap.
+      const partial = days.length >= 3 && (i === 0 || i === days.length - 1)
+      return {
+        key: d.date,
+        label: shortDay(d.date),
+        fullLabel: `${formatDate(d.date)}${partial ? " (sebagian hari)" : ""}`,
+        value: d.count,
+        partial,
+      }
+    })
+  }, [fires7d.data])
+  const completeDays = dailyData.filter((d) => !d.partial).map((d) => d.value)
 
-  const fields = useDashboardStat(getFieldsSummary)
-  const landCover = useDashboardStat(getLandCoverStats)
-  const fireHotspots = useDashboardStat(getFireHotspotCount)
-  const alerts = useDashboardStat(getActiveAlertsCount)
+  const topProvinces = (fires24h.data?.byProvince ?? []).slice(0, 8)
+  const latestQuake = quakes.data?.recent[0] ?? quakes.data?.latest ?? null
+  const urgentAlerts = alerts.filter((a) => a.severity === "kritis" || a.severity === "tinggi").length
+  const quakeList = quakes.data?.recent.slice(0, 5) ?? []
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50/30 flex">
-      {/* Sidebar */}
-      <div className="w-64 bg-gradient-to-b from-emerald-50 via-teal-50 to-cyan-50 flex flex-col min-h-screen shadow-2xl border-r border-emerald-200/50 relative">
-        <div className="absolute inset-0 opacity-5">
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-emerald-400 to-teal-600"></div>
-          <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="currentColor" strokeWidth="0.5" />
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#grid)" />
-          </svg>
-        </div>
-
-        <div className="relative z-10 flex items-center gap-3 p-6 pb-4 border-b border-emerald-200/30 bg-white/20 backdrop-blur-sm">
-          <div className="p-2 bg-emerald-500 rounded-lg shadow-lg">
-            <Leaf className="w-6 h-6 text-white" />
-          </div>
-          <span className="text-xl font-bold text-emerald-800 tracking-wide">EcoSentra</span>
-        </div>
-
-        <nav className="relative z-10 space-y-1 px-4 flex-1 py-6">
-          <Button
-            variant="secondary"
-            className="w-full justify-start bg-white/80 text-emerald-800 shadow-lg border border-emerald-200/50 hover:bg-white/90 hover:shadow-xl transition-all duration-300 backdrop-blur-sm"
-          >
-            <LayoutDashboard className="w-4 h-4 mr-3" />
-            Dashboard
+    <PageContainer>
+      <PageHeader
+        title="Dashboard"
+        description="Kondisi terkini lahan dan ekosistem Indonesia dari data satelit dan lembaga resmi — diambil langsung saat halaman dibuka."
+        actions={
+          <Button asChild>
+            <Link href="/maps">
+              <MapPin aria-hidden /> Buka peta
+            </Link>
           </Button>
-          <Link href="/fields">
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-emerald-700 hover:bg-white/40 hover:shadow-md transition-all duration-300 hover:translate-x-1"
-            >
-              <MapPin className="w-4 h-4 mr-3" />
-              My Fields
-            </Button>
-          </Link>
-          <Link href="/maps">
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-emerald-700 hover:bg-white/40 hover:shadow-md transition-all duration-300 hover:translate-x-1"
-            >
-              <Map className="w-4 h-4 mr-3" />
-              Maps & Export
-            </Button>
-          </Link>
-          <Link href="/disaster-alerts">
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-emerald-700 hover:bg-white/40 hover:shadow-md transition-all duration-300 hover:translate-x-1"
-            >
-              <AlertTriangle className="w-4 h-4 mr-3" />
-              Disaster Alerts
-            </Button>
-          </Link>
-          <Link href="/eco-services">
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-emerald-700 hover:bg-white/40 hover:shadow-md transition-all duration-300 hover:translate-x-1"
-            >
-              <TreePine className="w-4 h-4 mr-3" />
-              Eco Services
-            </Button>
-          </Link>
-          <Link href="/decision-support">
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-emerald-700 hover:bg-white/40 hover:shadow-md transition-all duration-300 hover:translate-x-1"
-            >
-              <Brain className="w-4 h-4 mr-3" />
-              Decision Support
-            </Button>
-          </Link>
-          <Link href="/">
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-emerald-700 hover:bg-white/40 hover:shadow-md transition-all duration-300 hover:translate-x-1"
-            >
-              <Home className="w-4 h-4 mr-3" />
-              Main Menu
-            </Button>
-          </Link>
-        </nav>
+        }
+      />
 
-        <div className="relative z-10 space-y-1 px-4 pb-6 border-t border-emerald-200/30 pt-4 bg-white/10 backdrop-blur-sm">
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-emerald-700 hover:bg-white/40 hover:shadow-md transition-all duration-300 hover:translate-x-1"
-          >
-            <Settings className="w-4 h-4 mr-3" />
-            Settings
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-emerald-700 hover:bg-white/40 hover:shadow-md transition-all duration-300 hover:translate-x-1"
-          >
-            <HelpCircle className="w-4 h-4 mr-3" />
-            Help Center
-          </Button>
-        </div>
+      {/* Ringkasan utama */}
+      <section aria-label="Ringkasan" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatTile
+          label="Titik api (24 jam)"
+          icon={Flame}
+          accent="bg-orange-100 text-orange-700"
+          isLoading={fires24h.isLoading}
+          error={fires24h.error}
+          onRetry={fires24h.reload}
+          value={fires24h.data ? formatNumber(fires24h.data.total) : undefined}
+          note={fires24h.data ? `${formatNumber(fires24h.data.highConfidence)} berkeyakinan tinggi` : undefined}
+          trend={
+            completeDays.length > 1 ? (
+              <Sparkline values={completeDays} accent={ENTITY_COLORS.fire} label="Tren titik api harian, hari lengkap" />
+            ) : undefined
+          }
+        />
+        <StatTile
+          label="Provinsi dengan titik api"
+          icon={Sprout}
+          accent="bg-emerald-100 text-emerald-700"
+          isLoading={fires24h.isLoading}
+          error={fires24h.error}
+          onRetry={fires24h.reload}
+          value={fires24h.data ? `${fires24h.data.byProvince.length} / 34` : undefined}
+          note={topProvinces[0] ? `Terbanyak: ${topProvinces[0].name}` : "Tidak ada titik api terdeteksi"}
+        />
+        <StatTile
+          label="Gempa M 5+ terbaru"
+          icon={Activity}
+          accent="bg-violet-100 text-violet-700"
+          isLoading={quakes.isLoading}
+          error={quakes.error}
+          onRetry={quakes.reload}
+          value={latestQuake ? `M ${latestQuake.magnitude.toFixed(1)}` : "—"}
+          note={latestQuake ? `${latestQuake.region} · ${formatRelative(latestQuake.occurredAt)}` : undefined}
+        />
+        <StatTile
+          label="Peringatan aktif"
+          icon={TriangleAlert}
+          accent="bg-red-100 text-red-700"
+          isLoading={fires24h.isLoading || quakes.isLoading}
+          error={fires24h.error && quakes.error ? "gagal" : null}
+          onRetry={() => {
+            fires24h.reload()
+            quakes.reload()
+          }}
+          value={formatNumber(alerts.length)}
+          note={`${formatNumber(urgentAlerts)} tingkat tinggi/kritis`}
+        />
+      </section>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+        {/* Tren harian */}
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-lg">Titik api per hari — 7 hari terakhir</CardTitle>
+            <CardDescription>
+              Jumlah titik api VIIRS di daratan Indonesia per hari kalender WIB. Kolom pucat = hari yang belum lengkap.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {fires7d.isLoading ? (
+              <Skeleton className="h-[220px] w-full" />
+            ) : fires7d.error ? (
+              <ErrorState message={fires7d.error} onRetry={fires7d.reload} />
+            ) : (
+              <>
+                <ColumnChart
+                  data={dailyData}
+                  color={ENTITY_COLORS.fire}
+                  ariaLabel="Grafik kolom jumlah titik api per hari selama 7 hari terakhir"
+                  unit="titik api"
+                />
+                <ChartTable
+                  caption="Jumlah titik api per hari"
+                  columns={["Tanggal (WIB)", "Titik api"]}
+                  rows={dailyData.map((d) => [d.fullLabel ?? d.label, d.value])}
+                />
+                {fires7d.data && (
+                  <SourceNote
+                    className="mt-3"
+                    name="NASA FIRMS"
+                    url="https://firms.modaps.eosdis.nasa.gov/active_fire/"
+                    fetchedAt={fires7d.data.source.fetchedAt}
+                    extra={fires7d.data.source.satellite}
+                  />
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Peringatan teratas */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Peringatan teratas</CardTitle>
+            <CardDescription>Gabungan gempa BMKG, klaster titik api, dan peringatan admin.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {fires24h.isLoading && quakes.isLoading ? (
+              <LoadingLines rows={5} />
+            ) : alerts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Tidak ada peringatan aktif saat ini.</p>
+            ) : (
+              <ul className="divide-y">
+                {alerts.slice(0, 4).map((alert) => (
+                  <li key={alert.id} className="py-3 first:pt-0 last:pb-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <SeverityBadge severity={alert.severity} />
+                      <span className="shrink-0 text-xs text-muted-foreground">{formatRelative(alert.occurredAt)}</span>
+                    </div>
+                    <Link
+                      href={mapLink(alert.location, alert.kind)}
+                      className="mt-1.5 block text-sm font-medium leading-snug text-foreground hover:text-emerald-800 hover:underline"
+                    >
+                      {alert.title}
+                    </Link>
+                    <p className="mt-0.5 text-xs text-muted-foreground">{alert.source}</p>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Button asChild variant="ghost" size="sm" className="mt-3 -ml-2 text-emerald-800">
+              <Link href="/disaster-alerts">
+                Semua peringatan <ArrowRight aria-hidden />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 p-8">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-800">Dashboard</h1>
-            <p className="text-gray-600 mt-1">Ringkasan pemantauan lahan dan ekosistem Anda</p>
-          </div>
-          <div className="flex items-center gap-6 text-gray-600">
-            <div className="text-right">
-              <div className="font-medium">{dateInfo.dayName}</div>
-              <div className="text-sm">{dateInfo.fullDate}</div>
-              <div className="text-xs text-blue-600">{dateInfo.time}</div>
-            </div>
-            <div className="flex items-center gap-2 bg-emerald-100 px-4 py-2 rounded-xl shadow-md border border-emerald-200">
-              <MapPin className="w-4 h-4 text-emerald-600" />
-              <span className="font-medium text-emerald-800">Indonesia</span>
-            </div>
-          </div>
-        </div>
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        {/* Provinsi */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Provinsi dengan titik api terbanyak</CardTitle>
+            <CardDescription>24 jam terakhir. Arahkan kursor ke bar untuk melihat jumlah keyakinan tinggi.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {fires24h.isLoading ? (
+              <LoadingLines rows={6} />
+            ) : fires24h.error ? (
+              <ErrorState message={fires24h.error} onRetry={fires24h.reload} />
+            ) : topProvinces.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Tidak ada titik api terdeteksi dalam 24 jam terakhir.</p>
+            ) : (
+              <BarList
+                ariaLabel="Jumlah titik api per provinsi, 24 jam terakhir"
+                color={ENTITY_COLORS.fire}
+                items={topProvinces.map((p) => ({
+                  key: p.iso,
+                  label: p.name,
+                  value: p.count,
+                  detail: (
+                    <>
+                      <strong>{formatNumber(p.highConfidence)}</strong> berkeyakinan tinggi · {p.island}
+                    </>
+                  ),
+                }))}
+              />
+            )}
+          </CardContent>
+        </Card>
 
-        {/* Ringkasan Statistik */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <StatCard
-            icon={<MapPin className="w-6 h-6 text-green-600" />}
-            iconBg="bg-green-100"
-            label="Total Lahan Dipantau"
-            isLoading={fields.isLoading}
-            error={fields.error}
-            onRetry={fields.retry}
-            subtitle={fields.data ? `${fields.data.totalAreaHa.toFixed(1)} ha total` : undefined}
-          >
-            {fields.data?.totalFields}
-          </StatCard>
+        {/* Gempa */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Gempa bumi terkini (M 5.0+)</CardTitle>
+            <CardDescription>Data BMKG, diperbarui otomatis.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {quakes.isLoading ? (
+              <LoadingLines rows={5} />
+            ) : quakes.error ? (
+              <ErrorState message={quakes.error} onRetry={quakes.reload} />
+            ) : (
+              <>
+                <ul className="divide-y">
+                  {quakeList.map((quake) => (
+                    <li key={quake.id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                      <div
+                        className="flex h-10 w-12 shrink-0 flex-col items-center justify-center rounded-md bg-violet-100 text-violet-900"
+                        aria-label={`Magnitudo ${quake.magnitude.toFixed(1)}`}
+                      >
+                        <span className="text-[10px] font-medium leading-none">M</span>
+                        <span className="text-base font-bold leading-tight">{quake.magnitude.toFixed(1)}</span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={mapLink({ lat: quake.lat, lng: quake.lng }, "gempa")}
+                          className="block truncate text-sm font-medium hover:text-emerald-800 hover:underline"
+                        >
+                          {quake.region}
+                        </Link>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDateTime(quake.occurredAt)} · kedalaman {quake.depthKm} km
+                        </p>
+                      </div>
+                      {quake.tsunamiPotential && (
+                        <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-900">
+                          Potensi tsunami
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {quakes.data && (
+                  <SourceNote
+                    className="mt-3"
+                    name="BMKG"
+                    url="https://data.bmkg.go.id/gempabumi/"
+                    fetchedAt={quakes.data.source.fetchedAt}
+                  />
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
-          <StatCard
-            icon={<Layers className="w-6 h-6 text-blue-600" />}
-            iconBg="bg-blue-100"
-            label="Area Terklasifikasi"
-            isLoading={landCover.isLoading}
-            error={landCover.error}
-            onRetry={landCover.retry}
-            subtitle={landCover.data ? `Dominan: ${landCover.data.dominantClass}` : undefined}
-          >
-            {landCover.data ? `${landCover.data.totalAreaClassifiedHa.toFixed(1)} ha` : undefined}
-          </StatCard>
-
-          <StatCard
-            icon={<Flame className="w-6 h-6 text-orange-600" />}
-            iconBg="bg-orange-100"
-            label="Titik Api (24 jam)"
-            isLoading={fireHotspots.isLoading}
-            error={fireHotspots.error}
-            onRetry={fireHotspots.retry}
-            subtitle={fireHotspots.data ? `${fireHotspots.data.last7d} dalam 7 hari` : undefined}
-          >
-            {fireHotspots.data?.last24h}
-          </StatCard>
-
-          <StatCard
-            icon={<AlertTriangle className="w-6 h-6 text-red-600" />}
-            iconBg="bg-red-100"
-            label="Alert Aktif"
-            isLoading={alerts.isLoading}
-            error={alerts.error}
-            onRetry={alerts.retry}
-            subtitle={alerts.data ? `${alerts.data.bySeverity.high} prioritas tinggi` : undefined}
-          >
-            {alerts.data?.total}
-          </StatCard>
-        </div>
-
-        {/* Akses Cepat */}
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold text-gray-800">Akses Cepat</h2>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Link href="/maps" className="h-full">
-            <Card className="h-full bg-white/80 backdrop-blur-sm shadow-xl border border-white/50 hover:shadow-2xl hover:-translate-y-0.5 transition-all duration-300 cursor-pointer">
-              <CardContent className="p-6 flex flex-col items-center text-center gap-3">
-                <div className="p-3 bg-blue-100 rounded-full">
-                  <Map className="w-6 h-6 text-blue-600" />
+      {/* Lahan saya */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="text-lg">Lahan saya</CardTitle>
+          <CardDescription>Pantau lahan Anda sendiri: tutupan lahan, NDVI, cuaca, dan titik api di sekitarnya.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!configured ? (
+            <EmptyState icon={MapPin} title="Penyimpanan lahan belum aktif">
+              Instalasi ini berjalan dalam mode demo tanpa login. Semua data publik di atas tetap tersedia penuh.
+            </EmptyState>
+          ) : !user ? (
+            <EmptyState
+              icon={LogIn}
+              title="Masuk untuk memantau lahan Anda"
+              action={
+                <Button asChild>
+                  <Link href="/login">Masuk / Daftar</Link>
+                </Button>
+              }
+            >
+              Simpan lokasi kebun atau sawah, lalu lihat analisis tutupan lahan dan kondisi vegetasinya.
+            </EmptyState>
+          ) : fields.isLoading ? (
+            <LoadingLines rows={2} />
+          ) : fields.error ? (
+            <ErrorState message={fields.error} onRetry={fields.reload} />
+          ) : (fields.data ?? []).length === 0 ? (
+            <EmptyState
+              icon={Sprout}
+              title="Belum ada lahan"
+              action={
+                <Button asChild>
+                  <Link href="/fields?add=1">Tambah lahan pertama</Link>
+                </Button>
+              }
+            >
+              Tambahkan lokasi lahan untuk mulai memantau.
+            </EmptyState>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex gap-8">
+                <div>
+                  <p className="text-3xl font-bold">{formatNumber(fields.data!.length)}</p>
+                  <p className="text-xs text-muted-foreground">lahan dipantau</p>
                 </div>
                 <div>
-                  <h3 className="font-semibold text-gray-800">Peta & Analisis Lahan</h3>
-                  <p className="text-sm text-gray-500 mt-1">Peta interaktif, titik api, dan tutupan lahan</p>
+                  <p className="text-3xl font-bold">
+                    {formatNumber(
+                      fields.data!.reduce((sum, f) => sum + f.areaHa, 0),
+                      1,
+                    )}
+                  </p>
+                  <p className="text-xs text-muted-foreground">hektare total</p>
                 </div>
-              </CardContent>
-            </Card>
-          </Link>
-
-          <Card className="h-full bg-white/50 backdrop-blur-sm shadow-md border border-white/50 opacity-75">
-            <CardContent className="p-6 flex flex-col items-center text-center gap-3">
-              <div className="p-3 bg-gray-100 rounded-full">
-                <Upload className="w-6 h-6 text-gray-500" />
+                <div>
+                  <p className="text-3xl font-bold">{formatNumber(fields.data!.filter((f) => f.lastAnalysis).length)}</p>
+                  <p className="text-xs text-muted-foreground">sudah dianalisis</p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-semibold text-gray-700">Upload Data</h3>
-                <p className="text-sm text-gray-500 mt-1">Unggah data lahan sendiri untuk dianalisis</p>
-                <Badge variant="secondary" className="mt-2">Coming Soon</Badge>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="h-full bg-white/50 backdrop-blur-sm shadow-md border border-white/50 opacity-75">
-            <CardContent className="p-6 flex flex-col items-center text-center gap-3">
-              <div className="p-3 bg-gray-100 rounded-full">
-                <MessageCircle className="w-6 h-6 text-gray-500" />
-              </div>
-              <div>
-                <h3 className="font-semibold text-gray-700">Asisten AI (LandAI)</h3>
-                <p className="text-sm text-gray-500 mt-1">Sudah aktif — klik ikon chat di pojok kanan bawah</p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      <AskLandAI />
-    </div>
+              <Button asChild variant="outline">
+                <Link href="/fields">
+                  Kelola lahan <ArrowRight aria-hidden />
+                </Link>
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </PageContainer>
   )
 }
