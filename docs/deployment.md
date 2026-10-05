@@ -90,8 +90,19 @@ npm run dev
 ```
 
 Daftar lewat `/login` (email & kata sandi bebas). Untuk data contoh dan peran admin,
-ambil UID dari respons emulator lalu jalankan
-`FIREBASE_PROJECT_ID=demo-ecosentra FIRESTORE_EMULATOR_HOST=127.0.0.1:8081 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 node scripts/seedFirestore.mjs <uid> --admin`.
+ambil UID akun yang baru dibuat lalu jalankan seed (perubahan admin baru berlaku setelah
+keluar dan masuk lagi):
+
+```bash
+curl -s -H "Authorization: Bearer owner" \
+  "http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/projects/demo-ecosentra/accounts:batchGet" \
+  | python3 -c "import sys,json; [print(u['localId'], u.get('email')) for u in json.load(sys.stdin)['users']]"
+
+# di apps/web
+FIREBASE_PROJECT_ID=demo-ecosentra FIRESTORE_EMULATOR_HOST=127.0.0.1:8081 \
+FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 node scripts/seedFirestore.mjs <uid> --admin
+```
+
 Data emulator hilang saat emulator dihentikan.
 
 > **Permintaan Firestore pertama lambat?** Wajar: SDK memuat protobuf (beberapa detik pada
