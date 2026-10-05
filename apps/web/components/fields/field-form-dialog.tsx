@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuthedFetch } from "@/hooks/use-api"
+import { useFormErrors } from "@/hooks/use-form-errors"
 import { errorMessage } from "@/lib/api-client"
 import type { Field, LatLng } from "@/lib/data/types"
 import { zodFieldErrors } from "@/lib/form"
@@ -42,7 +43,7 @@ export function FieldFormDialog({
   const authedFetch = useAuthedFetch()
   const [form, setForm] = useState<FormState>(EMPTY)
   const [location, setLocation] = useState<LatLng | null>(null)
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const { errors, setErrors, clear } = useFormErrors()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -63,9 +64,16 @@ export function FieldFormDialog({
       setForm(EMPTY)
       setLocation(prefill ?? null)
     }
-  }, [open, field, prefill])
+  }, [open, field, prefill, setErrors])
 
-  const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((f) => ({ ...f, [key]: value }))
+  const set = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+    setForm((f) => ({ ...f, [key]: value }))
+    clear(key)
+  }
+  const changeLocation = (next: LatLng | null) => {
+    setLocation(next)
+    clear("location", "location.lat", "location.lng")
+  }
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -143,7 +151,7 @@ export function FieldFormDialog({
           <LocationField
             idPrefix="field-loc"
             value={location}
-            onChange={setLocation}
+            onChange={changeLocation}
             errors={{ lat: errors["location.lat"], lng: errors["location.lng"], _form: errors.location }}
           />
           <div>

@@ -1,13 +1,13 @@
 "use client"
 
 import dynamic from "next/dynamic"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { LocateFixed } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { LatLng } from "@/lib/data/types"
-import { parseCoordinate } from "@/lib/form"
+import { parseCoordinate, sameLatLng } from "@/lib/form"
 import { isInIndonesiaBbox } from "@/lib/geo"
 
 const LocationPickerMap = dynamic(() => import("@/components/forms/location-picker-map"), {
@@ -34,8 +34,14 @@ export function LocationField({
   const [lngText, setLngText] = useState(value ? String(value.lng) : "")
   const [geoError, setGeoError] = useState<string | null>(null)
 
-  // Sinkronkan teks ketika nilai berubah dari luar (klik peta, tombol lokasi, prefill).
+  // Nilai terakhir yang dikirim dari ketikan sendiri. Teks hanya disinkronkan ulang kalau `value`
+  // berubah dari LUAR (klik peta, tombol lokasi, prefill); kalau tidak, mengetik "107." akan
+  // dinormalkan jadi "107" dan titik desimalnya hilang di tengah ketikan.
+  const emitted = useRef<LatLng | null>(value)
+
   useEffect(() => {
+    if (sameLatLng(value, emitted.current)) return
+    emitted.current = value
     setLatText(value ? String(value.lat) : "")
     setLngText(value ? String(value.lng) : "")
   }, [value])
@@ -43,8 +49,9 @@ export function LocationField({
   const commit = (lat: string, lng: string) => {
     const latNum = parseCoordinate(lat)
     const lngNum = parseCoordinate(lng)
-    if (latNum !== null && lngNum !== null) onChange({ lat: latNum, lng: lngNum })
-    else onChange(null)
+    const next = latNum !== null && lngNum !== null ? { lat: latNum, lng: lngNum } : null
+    emitted.current = next
+    onChange(next)
   }
 
   const useMyLocation = () => {

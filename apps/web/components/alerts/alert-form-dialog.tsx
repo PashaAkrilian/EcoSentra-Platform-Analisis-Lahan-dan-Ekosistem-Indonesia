@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuthedFetch } from "@/hooks/use-api"
+import { useFormErrors } from "@/hooks/use-form-errors"
 import { errorMessage } from "@/lib/api-client"
 import type { Alert, LatLng } from "@/lib/data/types"
 import { zodFieldErrors } from "@/lib/form"
@@ -47,7 +48,7 @@ export function AlertFormDialog({
   const authedFetch = useAuthedFetch()
   const [form, setForm] = useState(EMPTY)
   const [location, setLocation] = useState<LatLng | null>(null)
-  const [errors, setErrors] = useState<Record<string, string>>({})
+  const { errors, setErrors, clear } = useFormErrors()
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -58,7 +59,16 @@ export function AlertFormDialog({
       setErrors({})
       setSubmitError(null)
     }
-  }, [open])
+  }, [open, setErrors])
+
+  const set = <K extends keyof typeof EMPTY>(key: K, value: (typeof EMPTY)[K]) => {
+    setForm((f) => ({ ...f, [key]: value }))
+    clear(key)
+  }
+  const changeLocation = (next: LatLng | null) => {
+    setLocation(next)
+    clear("location", "location.lat", "location.lng")
+  }
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -94,7 +104,7 @@ export function AlertFormDialog({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label htmlFor="alert-type">Jenis</Label>
-              <Select value={form.type} onValueChange={(v) => setForm((f) => ({ ...f, type: v as Alert["type"] }))}>
+              <Select value={form.type} onValueChange={(v) => set("type", v as Alert["type"])}>
                 <SelectTrigger id="alert-type">
                   <SelectValue />
                 </SelectTrigger>
@@ -109,7 +119,7 @@ export function AlertFormDialog({
             </div>
             <div>
               <Label htmlFor="alert-severity">Tingkat keparahan</Label>
-              <Select value={form.severity} onValueChange={(v) => setForm((f) => ({ ...f, severity: v as Alert["severity"] }))}>
+              <Select value={form.severity} onValueChange={(v) => set("severity", v as Alert["severity"])}>
                 <SelectTrigger id="alert-severity">
                   <SelectValue />
                 </SelectTrigger>
@@ -125,7 +135,7 @@ export function AlertFormDialog({
           </div>
           <div>
             <Label htmlFor="alert-title">Judul</Label>
-            <Input id="alert-title" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} aria-invalid={Boolean(errors.title)} />
+            <Input id="alert-title" value={form.title} onChange={(e) => set("title", e.target.value)} aria-invalid={Boolean(errors.title)} />
             {errors.title && <p className="mt-1 text-xs text-red-700">{errors.title}</p>}
           </div>
           <div>
@@ -134,20 +144,20 @@ export function AlertFormDialog({
               id="alert-region"
               placeholder="mis. Kab. Bandung, Jawa Barat"
               value={form.regionName}
-              onChange={(e) => setForm((f) => ({ ...f, regionName: e.target.value }))}
+              onChange={(e) => set("regionName", e.target.value)}
               aria-invalid={Boolean(errors.regionName)}
             />
             {errors.regionName && <p className="mt-1 text-xs text-red-700">{errors.regionName}</p>}
           </div>
           <div>
             <Label htmlFor="alert-description">Keterangan</Label>
-            <Textarea id="alert-description" rows={3} value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} />
+            <Textarea id="alert-description" rows={3} value={form.description} onChange={(e) => set("description", e.target.value)} />
             {errors.description && <p className="mt-1 text-xs text-red-700">{errors.description}</p>}
           </div>
           <LocationField
             idPrefix="alert-loc"
             value={location}
-            onChange={setLocation}
+            onChange={changeLocation}
             errors={{ lat: errors["location.lat"], lng: errors["location.lng"], _form: errors.location }}
           />
           {submitError && <p className="text-sm text-red-700">{submitError}</p>}

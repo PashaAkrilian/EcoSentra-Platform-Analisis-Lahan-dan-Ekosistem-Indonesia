@@ -17,3 +17,14 @@ export function parseCoordinate(text: string): number | null {
   const value = Number(normalized)
   return Number.isFinite(value) ? value : null
 }
+
+export interface LatLngLike {
+  lat: number
+  lng: number
+}
+
+/** Dua titik sama (atau sama-sama kosong). Dipakai membedakan perubahan dari ketikan sendiri vs dari luar. */
+export function sameLatLng(a: LatLngLike | null, b: LatLngLike | null): boolean {
+  if (a === null || b === null) return a === b
+  return a.lat === b.lat && a.lng === b.lng
+}
