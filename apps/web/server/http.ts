@@ -52,10 +52,10 @@ export function formatZodError(error: ZodError): string {
 const MAX_BODY_BYTES = 100_000 // Firestore max 1 MiB/dokumen — di sini jauh lebih ketat
 
 /** Baca body JSON dengan batas ukuran. Validasi skema dilakukan pemanggil. */
-export async function readJsonBody(request: Request): Promise<unknown> {
+export async function readJsonBody(request: Request, maxBytes = MAX_BODY_BYTES): Promise<unknown> {
   const text = await request.text()
-  if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) {
-    throw new HttpError(413, `Body terlalu besar (maks ${MAX_BODY_BYTES} byte).`)
+  if (new TextEncoder().encode(text).length > maxBytes) {
+    throw new HttpError(413, `Body terlalu besar (maks ${maxBytes} byte).`)
   }
   if (!text) {
     throw new HttpError(400, "Body tidak boleh kosong.")
