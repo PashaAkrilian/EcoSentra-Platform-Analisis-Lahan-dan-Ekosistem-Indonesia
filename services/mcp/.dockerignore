@@ -4,3 +4,7 @@ __pycache__/
 .env
 credentials/
 README.md
+tests/
+requirements-dev.txt
+pytest.ini
+ruff.toml
