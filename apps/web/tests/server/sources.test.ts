@@ -138,6 +138,18 @@ describe("Tutupan lahan", () => {
     expect(fromGeo.source.dataset).toBe("ESA WorldCover v200")
     expect(fromGeo.classes.map((c) => c.name)).toEqual(["Tutupan pohon", "Mangrove"])
 
+    // API key services/geo dikirim sebagai header X-API-Key kalau dikonfigurasi
+    clearCache()
+    vi.stubEnv("GEO_SERVICE_API_KEY", "kunci-rahasia")
+    const withKey = vi.fn(async (_url: string, _init?: RequestInit) =>
+      Response.json({ classes: [{ code: 10, percentage: 100 }] }),
+    )
+    vi.stubGlobal("fetch", withKey)
+    await analyzeLandCover(-1, 117.5, 1000)
+    expect(new Headers(withKey.mock.calls[0]![1]!.headers).get("x-api-key")).toBe("kunci-rahasia")
+    vi.unstubAllEnvs()
+    vi.stubEnv("GEO_SERVICE_URL", "http://geo.test/")
+
     clearCache()
     vi.stubGlobal(
       "fetch",

@@ -158,10 +158,14 @@ export const TOKENS: Record<string, { uid: string; email: string; admin?: boolea
 }
 
 export const fakeAuth = {
+  deletedUids: [] as string[],
   async verifyIdToken(token: string) {
     const claims = TOKENS[token]
     if (!claims) throw new Error("auth/argument-error")
     return claims
+  },
+  async deleteUser(uid: string) {
+    this.deletedUids.push(uid)
   },
 }
 

@@ -7,6 +7,7 @@ import { apiRequest, fakeDb, firebaseState } from "../helpers/fakeFirebase"
 vi.mock("@/server/firebaseAdmin", async () => (await import("../helpers/fakeFirebase")).fakeFirebaseAdminModule())
 
 const hotspotsRoute = await import("@/app/api/hotspots/route")
+const summaryRoute = await import("@/app/api/hotspots/summary/route")
 const exportRoute = await import("@/app/api/hotspots/export/route")
 const weatherRoute = await import("@/app/api/weather/route")
 const alertsRoute = await import("@/app/api/alerts/route")
@@ -45,9 +46,23 @@ describe("/api/hotspots", () => {
     expect(res.status).toBe(400)
   })
 
+  it("menerima nama provinsi & singkatan, bukan hanya kode ISO", async () => {
+    const byIso = await (await hotspotsRoute.GET(apiRequest("/api/hotspots?range=24h&province=ID-PA"))).json()
+    for (const alias of ["Papua", "papua", "Provinsi%20Papua"]) {
+      const byName = await (await hotspotsRoute.GET(apiRequest(`/api/hotspots?range=24h&province=${alias}`))).json()
+      expect(byName.total, alias).toBe(byIso.total)
+    }
+    // endpoint ringkasan memakai skema yang sama (singkatan "sumsel" = Sumatera Selatan, 2 titik di fixture)
+    const sumsel = await (await summaryRoute.GET(apiRequest("/api/hotspots/summary?range=24h&province=sumsel"))).json()
+    expect(sumsel.total).toBe(2)
+    expect(sumsel.byProvince[0].iso).toBe("ID-SS")
+  })
+
   it("memvalidasi parameter", async () => {
     expect((await hotspotsRoute.GET(apiRequest("/api/hotspots?range=1y"))).status).toBe(400)
-    expect((await hotspotsRoute.GET(apiRequest("/api/hotspots?province=Papua"))).status).toBe(400)
+    const unknown = await hotspotsRoute.GET(apiRequest("/api/hotspots?province=Atlantis"))
+    expect(unknown.status).toBe(400)
+    expect((await unknown.json()).error).toMatch(/province tidak dikenali/)
   })
 })
 

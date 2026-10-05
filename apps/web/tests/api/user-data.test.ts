@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { apiRequest, fakeDb, firebaseState, params } from "../helpers/fakeFirebase"
+import { apiRequest, fakeAuth, fakeDb, firebaseState, params } from "../helpers/fakeFirebase"
 
 vi.mock("@/server/firebaseAdmin", async () => (await import("../helpers/fakeFirebase")).fakeFirebaseAdminModule())
 vi.mock("@/server/sources/landcover", async (importOriginal) => ({
@@ -46,6 +46,7 @@ async function createField(token = "token-alice", body: object = validField) {
 
 beforeEach(() => {
   fakeDb.reset()
+  fakeAuth.deletedUids.length = 0
   firebaseState.configured = true
 })
 
@@ -189,5 +190,35 @@ describe("/api/profile", () => {
       apiRequest("/api/profile", { token: "token-alice", method: "PUT", body: { displayName: "A", isAdmin: true } }),
     )
     expect(res.status).toBe(400)
+  })
+})
+
+describe("DELETE /api/profile (hapus akun & data)", () => {
+  it("menghapus semua data milik user saja, lalu akun login-nya", async () => {
+    const { id: aliceField } = await createField("token-alice")
+    await createField("token-alice", { ...validField, name: "Kebun kedua" })
+    const { id: bobField } = await createField("token-bob", { ...validField, name: "Kebun Bob" })
+    await analyzeRoute.POST(apiRequest(`/api/fields/${aliceField}/analyze`, { token: "token-alice", method: "POST" }), params({ id: aliceField }))
+    await decisionsRoute.POST(
+      apiRequest("/api/decisions", { token: "token-alice", method: "POST", body: { title: "Skenario Alice", category: "pertanian" } }),
+    )
+    await profileRoute.PUT(apiRequest("/api/profile", { token: "token-alice", method: "PUT", body: { displayName: "Alice" } }))
+
+    expect(fakeDb.store("fields").size).toBe(3)
+
+    const res = await profileRoute.DELETE(apiRequest("/api/profile", { token: "token-alice", method: "DELETE" }))
+    expect(res.status).toBe(204)
+
+    expect([...fakeDb.store("fields").keys()]).toEqual([bobField])
+    expect(fakeDb.store("landCoverSnapshots").size).toBe(0)
+    expect(fakeDb.store("decisions").size).toBe(0)
+    expect(fakeDb.store("users").has("alice")).toBe(false)
+    expect(fakeAuth.deletedUids).toEqual(["alice"])
+  })
+
+  it("butuh login", async () => {
+    const res = await profileRoute.DELETE(apiRequest("/api/profile", { method: "DELETE" }))
+    expect(res.status).toBe(401)
+    expect(fakeAuth.deletedUids).toEqual([])
   })
 })

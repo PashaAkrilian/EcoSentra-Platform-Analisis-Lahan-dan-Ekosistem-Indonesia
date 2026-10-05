@@ -91,3 +91,19 @@ export async function deleteOwned(collection: OwnedCollection, id: string, uid: 
   const doc = await getOwnedSnapshot(collection, id, uid)
   await doc.ref.delete()
 }
+
+const DELETE_BATCH_SIZE = 400 // batas batch Firestore 500 operasi
+
+/** Hapus semua dokumen milik user di satu koleksi (berulang per batch sampai habis). */
+export async function deleteAllOwned(collection: OwnedCollection, uid: string): Promise<number> {
+  const db = getDb()
+  let deleted = 0
+  for (;;) {
+    const snapshot = await db.collection(collection).where("userId", "==", uid).limit(DELETE_BATCH_SIZE).get()
+    if (snapshot.empty) return deleted
+    const batch = db.batch()
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref))
+    await batch.commit()
+    deleted += snapshot.docs.length
+  }
+}

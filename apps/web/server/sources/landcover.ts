@@ -1,6 +1,7 @@
 import "server-only"
 import { cached } from "@/server/cache"
 import type { LandCoverClass, LandCoverResult } from "@/lib/data/types"
+import { MAX_BUFFER_METERS, MIN_BUFFER_METERS } from "@/lib/geo"
 
 /**
  * Analisis tutupan lahan dalam radius `bufferMeters` dari satu titik.
@@ -54,20 +55,11 @@ const ESRI_MAX_IMAGE_PX = 3000 // batas server 4000 px per sisi; sisakan margin
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000 // peta tutupan lahan bersifat tahunan
 const FETCH_TIMEOUT_MS = 45_000
 
-export const MIN_BUFFER_METERS = 100
-export const MAX_BUFFER_METERS = 50_000
-
-/** Radius lingkaran yang luasnya sama dengan luas lahan (dibatasi 100 m - 50 km). */
-export function bufferForArea(areaHa: number): number {
-  const radius = Math.round(Math.sqrt((areaHa * 10_000) / Math.PI))
-  return Math.min(MAX_BUFFER_METERS, Math.max(MIN_BUFFER_METERS, radius))
-}
-
 function areaHa(bufferMeters: number): number {
   return Math.round((Math.PI * bufferMeters ** 2) / 10_000)
 }
 
-function toClasses(counts: Map<number, number>, legend: Record<number, ClassInfo>): LandCoverClass[] {
+export function toClasses(counts: Map<number, number>, legend: Record<number, ClassInfo>): LandCoverClass[] {
   const total = [...counts.values()].reduce((a, b) => a + b, 0)
   if (total === 0) return []
   return [...counts.entries()]
@@ -78,6 +70,8 @@ function toClasses(counts: Map<number, number>, legend: Record<number, ClassInfo
       color: legend[code]?.color ?? "#9ca3af",
       percentage: Math.round((count / total) * 10_000) / 100,
     }))
+    // Kelas di bawah 0,05% (tampil "0%") hanya menambah derau; selisihnya terhadap 100% dapat diabaikan.
+    .filter((c) => c.percentage >= 0.05)
     .sort((a, b) => b.percentage - a.percentage)
 }
 
@@ -103,13 +97,33 @@ async function fetchJson(url: string, init?: RequestInit): Promise<unknown> {
 }
 
 /** Tahun terbaru yang tersedia di ImageServer Esri (dari timeInfo layanan). */
-async function latestEsriYear(): Promise<number> {
+export async function latestEsriYear(): Promise<number> {
   return cached("esri-lulc:latest-year", CACHE_TTL_MS, async () => {
     const info = (await fetchJson(`${ESRI_IMAGE_SERVER}?f=json`)) as { timeInfo?: { timeExtent?: number[] } }
     const end = info.timeInfo?.timeExtent?.[1]
     if (!end) throw new Error("Esri Land Cover: timeInfo tidak tersedia.")
     return new Date(end).getUTCFullYear()
   })
+}
+
+interface EsriHistogramPayload {
+  histograms?: { counts: number[]; min: number }[]
+  error?: { message?: string; details?: string[] }
+}
+
+/** Respons computeHistograms -> jumlah piksel per kode kelas (bin ke-i = nilai piksel; 0 = no data). */
+export function esriHistogramToCounts(payload: EsriHistogramPayload): Map<number, number> {
+  if (payload.error) {
+    throw new Error(`Esri Land Cover: ${payload.error.details?.[0] ?? payload.error.message ?? "error"}`)
+  }
+  const histogram = payload.histograms?.[0]
+  if (!histogram) throw new Error("Esri Land Cover: histogram kosong.")
+  const counts = new Map<number, number>()
+  histogram.counts.forEach((count, i) => {
+    const code = Math.round(histogram.min + 0.5) + i
+    if (code !== 0 && count > 0) counts.set(code, count)
+  })
+  return counts
 }
 
 export async function analyzeWithEsri(lat: number, lng: number, bufferMeters: number): Promise<LandCoverResult> {
@@ -122,23 +136,8 @@ export async function analyzeWithEsri(lat: number, lng: number, bufferMeters: nu
     pixelSize: JSON.stringify({ x: pixelSizeM, y: pixelSizeM, spatialReference: { wkid: 3857 } }),
     f: "json",
   })
-  const payload = (await fetchJson(`${ESRI_IMAGE_SERVER}/computeHistograms?${params}`)) as {
-    histograms?: { counts: number[]; min: number }[]
-    error?: { message?: string; details?: string[] }
-  }
-  if (payload.error) {
-    throw new Error(`Esri Land Cover: ${payload.error.details?.[0] ?? payload.error.message ?? "error"}`)
-  }
-  const histogram = payload.histograms?.[0]
-  if (!histogram) throw new Error("Esri Land Cover: histogram kosong.")
-
-  // Bin ke-i = nilai piksel (min -0.5, lebar bin 1). Nilai 0 = no data.
-  const counts = new Map<number, number>()
-  histogram.counts.forEach((count, i) => {
-    const code = Math.round(histogram.min + 0.5) + i
-    if (code !== 0 && count > 0) counts.set(code, count)
-  })
-  const classes = toClasses(counts, ESRI_LULC_CLASSES)
+  const payload = (await fetchJson(`${ESRI_IMAGE_SERVER}/computeHistograms?${params}`)) as EsriHistogramPayload
+  const classes = toClasses(esriHistogramToCounts(payload), ESRI_LULC_CLASSES)
   if (classes.length === 0) throw new Error("Tidak ada data tutupan lahan pada area ini.")
 
   return {
@@ -165,9 +164,10 @@ export async function analyzeWithGeoService(
   lng: number,
   bufferMeters: number,
 ): Promise<LandCoverResult> {
+  const apiKey = process.env.GEO_SERVICE_API_KEY
   const payload = (await fetchJson(`${baseUrl.replace(/\/$/, "")}/api/landcover`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(apiKey ? { "X-API-Key": apiKey } : {}) },
     body: JSON.stringify({ lat, lng, buffer_meters: bufferMeters }),
   })) as { classes?: { code: number; percentage: number }[] }
 

@@ -116,3 +116,27 @@ describe("getHotspotDataset", () => {
     await expect(getHotspotDataset("7d")).rejects.toThrow(/status 503/)
   })
 })
+
+describe("data provinsi", () => {
+  it("luas 34 provinsi menjumlah ≈ luas daratan Indonesia", async () => {
+    const { listProvinces } = await import("@/server/geo/indonesia")
+    const provinces = listProvinces()
+    expect(provinces).toHaveLength(34)
+    const total = provinces.reduce((sum, p) => sum + p.areaKm2, 0)
+    // resmi ±1.904.569 km² (BPS); data sederhana boleh meleset < 1%
+    expect(total).toBeGreaterThan(1_880_000)
+    expect(total).toBeLessThan(1_930_000)
+    expect(provinces.find((p) => p.iso === "ID-JK")!.areaKm2).toBeLessThan(800)
+  })
+
+  it("GeoJSON provinsi valid & lengkap", async () => {
+    const { provincesGeoJson } = await import("@/server/geo/indonesia")
+    const geojson = provincesGeoJson()
+    expect(geojson.features).toHaveLength(34)
+    const kalteng = geojson.features.find((f) => f.properties.iso === "ID-KT")!
+    expect(kalteng.properties.name).toBe("Kalimantan Tengah")
+    const ring = kalteng.geometry.coordinates[0]![0]!
+    expect(ring[0]).toEqual(ring.at(-1)) // ring tertutup
+    expect(ring[0]).toHaveLength(2)
+  })
+})

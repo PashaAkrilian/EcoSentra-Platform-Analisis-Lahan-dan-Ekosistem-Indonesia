@@ -4,7 +4,8 @@ import { requireUser } from "@/server/auth"
 import { createOwned, getOwnedSnapshot, serializeDoc } from "@/server/firestore"
 import { handleRoute } from "@/server/http"
 import { enforceRateLimit } from "@/server/rateLimit"
-import { analyzeLandCover, bufferForArea } from "@/server/sources/landcover"
+import { bufferForArea } from "@/lib/geo"
+import { analyzeLandCover } from "@/server/sources/landcover"
 
 type Params = { params: Promise<{ id: string }> }
 
