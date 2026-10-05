@@ -11,15 +11,13 @@ fitur (bukan branch `develop` terpisah per domain).
 Repo ini adalah monorepo dengan struktur:
 
 - `apps/web` — Frontend (Next.js/TypeScript) & Backend API utama (Next.js API Routes di `apps/web/app/api`)
-- `services/ml` — Layanan ML (FastAPI/Python) — *placeholder, belum ada kode*
-- `services/mcp` — MCP server (Python) — *placeholder, belum ada kode*
+- `services/geo` — Layanan geo opsional (FastAPI/Python, Google Earth Engine)
+- `services/mcp` — MCP server (Python) untuk asisten AI eksternal
+- `services/ml` — catatan: tidak ada layanan ML (eksperimen ada di `experiments/`)
 
 Konvensi penamaan branch di bawah ini mengacu ke **domain fitur**
-(frontend/backend/ml/mcp/security), bukan ke path folder secara ketat — jadi
-konvensi ini tetap berlaku meski `services/ml` dan `services/mcp` masih
-kosong sampai diisi lewat branch `feature/ml-*` / `feature/mcp-*`
-masing-masing. Security (`sec-*`) mencakup keseluruhan proyek, jadi tidak
-terikat satu folder tertentu.
+(frontend/backend/ml/mcp/security), bukan ke path folder secara ketat.
+Security (`sec-*`) mencakup keseluruhan proyek, jadi tidak terikat satu folder tertentu.
 
 ### Struktur di dalam `apps/web`
 
