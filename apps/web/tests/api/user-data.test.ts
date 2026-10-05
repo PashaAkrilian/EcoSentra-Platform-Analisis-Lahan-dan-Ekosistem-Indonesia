@@ -185,6 +185,13 @@ describe("/api/profile", () => {
     expect(updated).toMatchObject({ displayName: "Alice", organization: "KLHK", isAdmin: false })
   })
 
+  it("nama default profil memakai klaim `name` dari akun login, lalu awalan email", async () => {
+    const carol = await (await profileRoute.GET(apiRequest("/api/profile", { token: "token-carol" }))).json()
+    expect(carol.displayName).toBe("Carol Dewi")
+    const alice = await (await profileRoute.GET(apiRequest("/api/profile", { token: "token-alice" }))).json()
+    expect(alice.displayName).toBe("alice")
+  })
+
   it("tidak bisa menjadikan diri sendiri admin", async () => {
     const res = await profileRoute.PUT(
       apiRequest("/api/profile", { token: "token-alice", method: "PUT", body: { displayName: "A", isAdmin: true } }),

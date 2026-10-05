@@ -13,7 +13,7 @@ function toProfile(user: AuthUser, data: FirebaseFirestore.DocumentData | undefi
     uid: user.uid,
     email: user.email,
     isAdmin: user.isAdmin,
-    displayName: (data?.displayName as string | undefined) ?? user.email?.split("@")[0] ?? "Pengguna",
+    displayName: (data?.displayName as string | undefined) ?? user.name ?? user.email?.split("@")[0] ?? "Pengguna",
     organization: (data?.organization as string | undefined) ?? "",
   }
 }

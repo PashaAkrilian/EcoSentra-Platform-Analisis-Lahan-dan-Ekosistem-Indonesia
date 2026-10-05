@@ -151,9 +151,10 @@ class FakeQuery {
   }
 }
 
-export const TOKENS: Record<string, { uid: string; email: string; admin?: boolean }> = {
+export const TOKENS: Record<string, { uid: string; email: string; name?: string; admin?: boolean }> = {
   "token-alice": { uid: "alice", email: "alice@example.com" },
   "token-bob": { uid: "bob", email: "bob@example.com" },
+  "token-carol": { uid: "carol", email: "carol@example.com", name: "Carol Dewi" },
   "token-admin": { uid: "admin", email: "admin@example.com", admin: true },
 }
 
