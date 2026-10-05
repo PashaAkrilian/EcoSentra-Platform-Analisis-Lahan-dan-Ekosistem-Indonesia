@@ -1,5 +1,9 @@
 # Laporan Cleanup Unused Files/Dependencies — `chore/cleanup-unused`
 
+> **Arsip.** Laporan ini ditulis sebelum frontend ditulis ulang di atas data nyata (lihat
+> `CHANGELOG.md`). Beberapa item yang dicatat "sengaja tidak dihapus" di bawah (mis. `zod`,
+> `skeleton.tsx`, `lib/firebaseClient.ts`, skrip seed) kini terpakai atau sudah ditulis ulang.
+
 Dikerjakan di branch `chore/cleanup-unused` (dari `develop`). Dokumen ini
 meringkas apa yang dihapus, kenapa, dan item yang **sengaja tidak disentuh**
 karena statusnya belum pasti.

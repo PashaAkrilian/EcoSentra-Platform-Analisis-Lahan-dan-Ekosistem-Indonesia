@@ -1,155 +1,139 @@
 # EcoSentra — Platform Analisis Lahan dan Ekosistem Indonesia
 
-![Status](https://img.shields.io/badge/status-Work%20in%20Progress%20--%20Portfolio%20Checkpoint-orange)
 [![CI](https://github.com/PashaAkrilian/EcoSentra-Platform-Analisis-Lahan-dan-Ekosistem-Indonesia/actions/workflows/ci.yml/badge.svg)](https://github.com/PashaAkrilian/EcoSentra-Platform-Analisis-Lahan-dan-Ekosistem-Indonesia/actions/workflows/ci.yml)
+![Lisensi](https://img.shields.io/badge/lisensi-MIT-green)
 
-EcoSentra adalah platform web untuk analisis tutupan lahan dan ekosistem di
-Indonesia, memanfaatkan data satelit (Google Earth Engine) dan model machine
-learning untuk klasifikasi tutupan lahan. Dokumen ini adalah **checkpoint
-jujur**: menjelaskan apa yang benar-benar berfungsi sekarang, apa yang baru
-sebagian, dan apa yang masih rencana — bukan daftar fitur ideal.
+EcoSentra memantau lahan dan ekosistem Indonesia dari **data satelit dan lembaga
+resmi yang terbuka**: titik api (NASA FIRMS), gempa (BMKG), kehijauan vegetasi
+(NDVI MODIS), tutupan lahan 10 m (Esri / ESA), dan cuaca (Open-Meteo). Setiap
+angka diambil langsung saat dibutuhkan dan selalu ditampilkan bersama sumber,
+waktu pengambilan, dan keterbatasannya — tanpa data karangan.
 
-## Status Fitur
+> **Coba tanpa konfigurasi apa pun:** `cd apps/web && npm ci && npm run dev` lalu buka
+> <http://localhost:8080>. Peta, dashboard, peringatan, profil ekosistem, ekspor, dan
+> asisten LandAI langsung berfungsi dengan data asli (mode demo, tanpa login).
 
-Label: **LIVE** (berfungsi & terverifikasi) · **PARTIAL** (kode ada, sebagian
-berfungsi) · **MOCK** (kode ada, pakai data simulasi) · **PLANNED** (belum
-dibangun).
+## Fitur
 
-| Fitur | Status | Catatan |
+| Fitur | Isi |
+|---|---|
+| **Peta & Analisis** | titik api (12 ribu+ titik, difilter ke daratan Indonesia & diberi label provinsi), gempa, layer NDVI / suhu permukaan (NASA GIBS), tutupan lahan 10 m, batas provinsi. Klik titik mana pun → komposisi tutupan lahan, deret NDVI (observasi berawan ditandai), cuaca & kelembapan tanah, titik api terdekat. Ekspor titik api ke GeoJSON / CSV / KML |
+| **Dashboard** | titik api 24 jam & tren 7 hari, provinsi teratas, gempa M 5+, peringatan aktif |
+| **Peringatan Bencana** | peringatan otomatis dari gempa BMKG dan klaster titik api per provinsi (ambang transparan), ditambah peringatan kurasi admin |
+| **Profil Ekosistem** | komposisi tutupan lahan dan kepadatan titik api per provinsi (34 provinsi) |
+| **Lahan Saya** *(butuh login)* | simpan lokasi lahan, analisis tutupan lahan berkala, kondisi terkini (NDVI, cuaca, titik api sekitar) |
+| **Pendukung Keputusan** *(butuh login)* | skenario pengelolaan lahan; yang punya lokasi mendapat konteks data terkini + rekomendasi indikatif berbasis aturan |
+| **LandAI** | asisten obrolan yang menjawab dengan data langsung: mode aturan (gratis) atau Claude dengan tool use (butuh `ANTHROPIC_API_KEY`) |
+| **MCP server** | mengekspos data yang sama sebagai tool untuk asisten AI eksternal (Claude Desktop, dst.) |
+
+## Status
+
+Label: ✅ **berfungsi & teruji** · ⚙️ **berfungsi, perlu konfigurasi/kredensial** · 🔬 **riset (tidak dipakai aplikasi)** · ⏳ **belum dikerjakan**
+
+| Bagian | Status | Catatan |
 |---|---|---|
-| Dashboard interaktif | 🧪 MOCK | Data dari `apps/web/lib/data/*.ts` (delay simulasi), belum tersambung Firestore asli |
-| Peta interaktif (Leaflet, hotspot, label zoom-aware) | ✅ LIVE | Render nyata di `/maps`, termasuk fix label-clutter di zoom rendah |
-| Backend API Firestore (10 route: `fields`, `alerts`, `users`, dst.) | ✅ LIVE | Validasi input (Zod) aktif; **tanpa autentikasi** — siapa pun bisa baca/tulis semua koleksi |
-| Layanan analisis tutupan lahan by koordinat (`services/geo`) | 🟡 PARTIAL | Terverifikasi jalan lokal + Google Earth Engine asli (rate limiting aktif); **belum di-deploy**, belum tersambung ke frontend/MCP di production |
-| MCP server (`services/mcp`, tool `get_land_cover`) | 🧪 MOCK | Default `LANDCOVER_API_URL` kosong → data simulasi; siap switch ke `services/geo` asli tinggal isi env var |
-| Klasifikasi tutupan lahan berbasis ML (SegFormer) | 🟡 PARTIAL | Model sudah dilatih (baseline run-01), akurasi piksel **12–23%** (dekat tebakan acak untuk 9 kelas) — belum layak dipakai |
-| Layanan serving model ML sebagai API | 📋 PLANNED | Belum ada kode sama sekali — sengaja ditunda sampai akurasi model layak |
-| Keamanan dasar (validasi input, rate limiting, audit kredensial) | ✅ LIVE | Zod di 9 route, rate limit di `/api/landcover`, ringkasan di `docs/security-checklist.md` |
-| CI/CD (GitHub Actions) | 🟡 PARTIAL | Pipeline lint/type-check/build sudah terpasang & benar secara konfigurasi; run saat ini merah karena secret Firebase belum diisi di GitHub |
-| Testing otomatis (unit/integration) | 📋 PLANNED | Nol test suite — hanya ada 1 script manual (`services/geo/test_gee.py`) |
-| Autentikasi/login user | 📋 PLANNED | Belum ada sama sekali — prioritas #1 roadmap keamanan |
+| Data publik (FIRMS, BMKG, Open-Meteo, MODIS, Esri, GIBS) | ✅ | diverifikasi langsung ke penyedia; parser & agregasi diuji dengan fixture respons asli |
+| Peta, dashboard, peringatan, profil ekosistem, ekspor | ✅ | diperiksa di browser; build produksi lolos tanpa kredensial |
+| Login, lahan, skenario, peringatan admin, hapus akun | ⚙️ ✅ | butuh project Firebase; **diuji dengan Admin SDK asli terhadap emulator** (7 uji integrasi: token, isolasi data, kaskade hapus, custom claim admin, aturan keamanan). Belum diuji ke project Firebase produksi |
+| LandAI mode aturan | ✅ | 16 uji (+7 uji alat data); jawaban dari data asli, tanpa mengarang angka; pertanyaan berkoordinat dijawab dengan ringkasan lokasi |
+| LandAI mode Claude | ⚙️ | loop tool use, streaming, dan penanganan galat diuji dengan klien palsu; **belum diuji ke API Anthropic sungguhan** (butuh kunci) — lakukan satu percobaan setelah mengisi `ANTHROPIC_API_KEY` |
+| `services/geo` (ESA WorldCover via Earth Engine) | ⚙️ ✅ | opsional; 13 uji; butuh service account GEE. Tanpa ini aplikasi memakai Esri |
+| `services/mcp` | ✅ | 5 tool; 16 uji termasuk uji protokol MCP lewat stdio sungguhan (mcp 1.x & 2.x) |
+| CI (GitHub Actions) | ✅ | lint · type-check · 148 test web · ruff+pytest Python · build Docker · audit; tanpa secret |
+| Model SegFormer (`experiments/`) | 🔬 | akurasi piksel 12–23%, belum layak pakai, **tidak dipakai aplikasi**; butuh GPU untuk dilatih ulang |
+| Deploy publik | ⏳ | repo siap deploy ([`docs/deployment.md`](docs/deployment.md)); belum ada instance publik |
+
+Keterbatasan data (titik api ≠ kebakaran terverifikasi, awan, klasifikasi otomatis, …)
+dijelaskan di UI (halaman *Bantuan & Metodologi*) dan di [`docs/data-sources.md`](docs/data-sources.md).
 
 ## Arsitektur
 
 ```mermaid
 flowchart LR
-    Browser["Browser"] --> Web["apps/web (Next.js)\nFrontend + API Routes"]
-    Web -->|"Firebase Admin SDK"| Firestore[("Firestore")]
-    Web -.->|"data simulasi (MOCK)"| DataLayer["lib/data/*\n(dashboard)"]
-
-    Web -.->|"belum tersambung production"| Geo
-    MCP["services/mcp\n(MOCK by default)"] -.->|"LANDCOVER_API_URL kosong"| Geo["services/geo (FastAPI)\nPARTIAL - jalan lokal"]
-    Geo -->|"terverifikasi"| GEE[("Google Earth Engine")]
-
-    Training["experiments/segformer\n(training only, 12-23% akurasi)"] -.->|"belum ada API"| Serving["ML Serving API\nPLANNED"]
-
-    classDef mock stroke-dasharray: 5 5
-    class DataLayer,MCP,Training,Serving mock
+    User["Pengguna"] --> Web["apps/web — Next.js 15\nUI + API routes"]
+    Web --> Public["NASA FIRMS · BMKG · Esri · ORNL MODIS · Open-Meteo"]
+    Web -->|"Admin SDK"| FS[("Firestore")]
+    User -->|"login"| Auth["Firebase Auth"]
+    Web -.->|"opsional"| Geo["services/geo\nFastAPI + Earth Engine"]
+    Web -.->|"opsional"| Claude["Claude API"]
+    AI["Asisten AI eksternal"] --> MCP["services/mcp"] --> Web
 ```
 
-Garis putus-putus = belum tersambung nyata / belum dibangun.
+Garis putus-putus = opsional. Detail dan keputusan desain: [`docs/architecture.md`](docs/architecture.md).
 
-## Teknologi & Alasan Pemilihan
+## Menjalankan secara lokal
 
-| Teknologi | Alasan Dipilih | Trade-off |
-|---|---|---|
-| Next.js 15 (App Router) | Satu framework untuk frontend + API routes ringan, cocok untuk MVP solo-developer | Backend & frontend campur dalam satu app — perlu disiplin folder (`server/` vs `lib/`) supaya kode server-only tidak ter-bundle ke client |
-| TypeScript | Type safety untuk API routes & data layer | Tidak dipakai di layanan Python (`services/geo`, `services/mcp`) — batas antar bahasa lewat HTTP/MCP, tanpa shared types |
-| Tailwind CSS + shadcn/ui (Radix) | Build UI cepat & konsisten tanpa CSS custom banyak | Template awal (v0.dev) membawa puluhan komponen tak terpakai — 41 file & 33 dependency baru dibersihkan, lihat `docs/cleanup-report.md` |
-| Firebase (Firestore + Admin SDK) | Setup cepat untuk MVP, tanpa mengelola server database sendiri | Admin SDK di route API **bypass total** Firestore Security Rules — kontrol akses efektif ada di level API yang saat ini tanpa auth |
-| FastAPI (`services/geo`) | Python adalah bahasa resmi SDK Google Earth Engine; FastAPI ringan & async | Menambah bahasa kedua di monorepo — perlu venv/Docker terpisah dari Node |
-| MCP (Model Context Protocol) | Supaya layanan geo bisa dipanggil sebagai tool oleh AI assistant (LandAI/agent eksternal) | Standar masih baru, ekosistem tooling lebih terbatas dibanding REST biasa |
-| SegFormer (HuggingFace, `segformer-b0`) | Model segmentasi semantik ringan untuk klasifikasi tutupan lahan dari citra | Butuh GPU untuk training layak; hasil run pertama (12-23% akurasi) menunjukkan effort training belum cukup |
-| Zod | Validasi skema ringan di sisi TypeScript, minim boilerplate | Skema saat ini generik (bukan per-collection) — belum menangkap semua kesalahan tipe data spesifik |
-| slowapi | Rate limiting in-memory sederhana untuk FastAPI | Tidak scale ke multi-instance/deployment horizontal — perlu Redis kalau traffic nyata |
-| GitHub Actions | CI terintegrasi langsung dengan GitHub, tanpa infra tambahan | Belum ada test otomatis untuk dijalankan — pipeline baru sebatas lint/type-check/build |
-
-## Cara Menjalankan Secara Lokal
-
-### `apps/web` — Frontend + Backend API
+Syarat: Node.js ≥ 22.12.
 
 ```bash
 cd apps/web
-npm install
-cp .env.local.example .env.local   # isi kredensial Firebase asli
-npm run dev
+npm ci
+npm run dev        # http://localhost:8080 — mode demo, tanpa kredensial
 ```
 
-Wajib diisi di `.env.local` supaya API routes tidak error saat start:
-`FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`
-(Firebase Console → Project Settings → **Service accounts** → Generate new
-private key).
+Panggilan pertama ke data titik api bisa 10–60 detik dari Indonesia (unduh CSV NASA); setelahnya cepat.
 
-### `services/geo` — Layanan Analisis Tutupan Lahan (GEE)
+Mengaktifkan login & penyimpanan, `services/geo`, LandAI penuh, dan MCP: lihat
+[`docs/deployment.md`](docs/deployment.md) (termasuk pengembangan dengan Firebase Emulator).
 
 ```bash
-cd services/geo
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env   # isi GEE_SERVICE_ACCOUNT, GEE_KEY_PATH
-uvicorn app.main:app --reload --port 8001
+npm run lint && npm run typecheck && npm test     # di apps/web
+(cd services/geo && pip install -r requirements-dev.txt && ruff check . && pytest)
+(cd services/mcp && pip install -r requirements-dev.txt && ruff check . && pytest)
 ```
 
-Wajib punya service account Google Earth Engine (file JSON) — tanpa ini,
-layanan tidak bisa terhubung ke GEE sama sekali.
-
-### `services/mcp` — MCP Server
-
-```bash
-cd services/mcp
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-python server.py
-```
-
-Langsung jalan dalam mode **MOCK** tanpa konfigurasi tambahan. Untuk mode
-nyata, set `LANDCOVER_API_URL=http://localhost:8001` (mengarah ke
-`services/geo` yang sudah jalan di atas).
-
-### `services/ml` — Eksperimen Model
-
-Belum ada API untuk dijalankan. Baca
-[`experiments/segformer-openearthmap/run-01-baseline/RUN_INFO.md`](./experiments/segformer-openearthmap/run-01-baseline/RUN_INFO.md)
-untuk hasil eksperimen training terkini.
-
-## Struktur Folder Monorepo
+## Struktur repo
 
 ```
 .
-├── apps/
-│   └── web/              # Next.js — frontend + API routes (Firestore)
+├── apps/web/            # Next.js 15 — UI + API routes (lihat apps/web/README.md)
 ├── services/
-│   ├── geo/               # FastAPI — analisis tutupan lahan via Google Earth Engine
-│   ├── mcp/                # MCP server — tool get_land_cover (mock/real switchable)
-│   └── ml/                 # Placeholder — belum ada kode serving
-├── experiments/
-│   └── segformer-openearthmap/  # Eksperimen training model klasifikasi tutupan lahan
-├── docs/                  # Dokumentasi turunan (lihat di bawah)
-└── .github/workflows/     # CI (lint, type-check, build)
+│   ├── geo/             # FastAPI — tutupan lahan ESA WorldCover via Google Earth Engine (opsional)
+│   ├── mcp/             # MCP server — data EcoSentra sebagai tool untuk asisten AI
+│   └── ml/              # catatan: belum ada layanan serving (lihat README-nya)
+├── experiments/         # eksperimen pelatihan SegFormer (riset)
+├── docs/                # dokumentasi (daftar di bawah)
+├── firebase.json        # Konfigurasi App Hosting; firestore.rules menolak akses klien langsung
+├── firebase.emulators.json  # Emulator Auth + Firestore untuk dev lokal & uji integrasi
+└── .github/             # CI, Dependabot, template PR
 ```
 
-## Roadmap Singkat
+## Teknologi & alasan
 
-Urutan pengerjaan selanjutnya, berdasarkan status nyata di atas:
+| Teknologi | Alasan | Trade-off |
+|---|---|---|
+| Next.js 15 (App Router) + TypeScript | UI dan API dalam satu app; tipe dipakai bersama (`lib/data/types.ts`) | server & klien dalam satu proyek — dipisahkan ketat lewat `server/` ber-`server-only` |
+| Leaflet (npm) | ringan, cocok untuk ribuan titik (renderer canvas) | tanpa mesin peta vektor; tile publik gratis ada batas pemakaian |
+| Tailwind + shadcn/ui (Radix) | UI konsisten & aksesibel | — |
+| Firebase Auth + Firestore (Admin SDK) | setup cepat tanpa mengelola server auth/DB | akses data hanya lewat API; `firestore.rules` menolak akses klien |
+| Zod | validasi skema yang sama di klien & server | — |
+| Vitest | cepat, TypeScript-native; Firebase diuji dengan emulator | — |
+| FastAPI (`services/geo`) | SDK resmi Earth Engine adalah Python | menambah bahasa kedua di monorepo |
+| MCP | asisten AI eksternal bisa memakai data yang sama | standar masih muda (SDK 1.x → 2.x berubah API; kompatibel keduanya) |
+| Claude (Anthropic SDK) | LandAI memakai tool use di atas data nyata | butuh kunci API; dibatasi untuk user login demi biaya |
 
-1. **Retraining model SegFormer** — epoch lebih banyak, sampai akurasi jauh di atas 12-23%.
-2. **Bangun layanan serving ML** (FastAPI wrapping model) — setelah akurasi layak.
-3. **Sambungkan MCP & dashboard ke layanan asli** — ganti `services/geo`/data layer dari mock ke real.
-4. **Deploy `services/geo`** — saat ini cuma terverifikasi jalan lokal.
-5. **Sistem autentikasi/login** — prioritas keamanan tertinggi, saat ini nol proteksi di semua 10 route yang menyentuh Firestore.
-6. **Test suite otomatis** (unit + integration) — nol test saat ini.
-7. **Lengkapi GitHub Actions Secrets** supaya pipeline CI hijau.
+## Dokumentasi
 
-## Dokumentasi Lain
+- [`docs/architecture.md`](docs/architecture.md) — arsitektur & keputusan desain
+- [`docs/api.md`](docs/api.md) — referensi endpoint
+- [`docs/deployment.md`](docs/deployment.md) — konfigurasi, Firebase, deploy, emulator, MCP
+- [`docs/data-sources.md`](docs/data-sources.md) — sumber data, lisensi, atribusi
+- [`docs/security-checklist.md`](docs/security-checklist.md) — model ancaman & status keamanan
+- [`docs/ci-cd.md`](docs/ci-cd.md) — pipeline CI
+- [`docs/git-workflow.md`](docs/git-workflow.md) — strategi branching (GitLab Flow)
+- [`docs/cleanup-report.md`](docs/cleanup-report.md) — arsip: pembersihan dependency template (sebelum penulisan ulang)
+- [`CHANGELOG.md`](CHANGELOG.md) — ringkasan perubahan rilis 1.0
 
-- [`docs/git-workflow.md`](./docs/git-workflow.md) — strategi branching (GitLab Flow)
-- [`docs/security-checklist.md`](./docs/security-checklist.md) — hasil audit keamanan fondasi
-- [`docs/api-contracts.md`](./docs/api-contracts.md) — kontrak endpoint dashboard (mock → real)
-- [`docs/ci-cd.md`](./docs/ci-cd.md) — penjelasan pipeline CI & cara menambah job baru
-- [`docs/cleanup-report.md`](./docs/cleanup-report.md) — laporan pembersihan file/dependency tidak terpakai
+## Langkah berikutnya (di luar cakupan rilis ini)
+
+1. **Verifikasi LandAI mode Claude dengan kunci API sungguhan** dan pilih model sesuai anggaran (`ANTHROPIC_MODEL`).
+2. **Deploy** `apps/web` (dan opsional `services/geo`) lalu jalankan satu putaran manual di project Firebase produksi.
+3. **Ganti tile peta gratis** dengan penyedia berbayar bila lalu lintas tinggi; Open-Meteo berbayar bila dipakai komersial.
+4. **Perbarui batas wilayah ke 38 provinsi** (pemekaran Papua 2022).
+5. **Latih ulang model SegFormer** (butuh GPU, epoch jauh lebih banyak) — hanya bila akurasinya dibutuhkan di luar dataset Esri/ESA.
+6. **Keputusan pemilik repo:** membersihkan riwayat Git dari kredensial lama (sudah dirotasi) — lihat `docs/security-checklist.md`.
+7. **Periksa tampilan seluler secara visual** (DevTools / perangkat nyata): tata letak responsif sudah dirancang (menu mobile, grid adaptif), tetapi pengujian browser sejauh ini hanya pada layar desktop.
 
 ## Lisensi
 
-Proyek ini dilisensikan di bawah [MIT License](./License.txt).
-
-Hak Cipta © 2025 tim EcoSentra – Ketua: PashaAkrilian
+[MIT License](./License.txt) — Hak Cipta © 2025 tim EcoSentra – Ketua: PashaAkrilian

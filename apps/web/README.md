@@ -1,62 +1,76 @@
-# apps/web — EcoSentra Frontend
+# apps/web — EcoSentra (UI + API)
 
-Frontend Next.js (App Router, TypeScript) untuk EcoSentra, termasuk backend
-API utama (Next.js API Routes di `app/api/*`).
+Next.js 15 (App Router, React 19, TypeScript) — halaman dan API routes dalam satu app.
+Gambaran besar: [`../../docs/architecture.md`](../../docs/architecture.md); endpoint:
+[`../../docs/api.md`](../../docs/api.md).
 
-## Menjalankan Lokal
+## Menjalankan
 
 ```bash
-cd apps/web
-npm install
-cp .env.local.example .env.local   # isi kredensial Firebase Anda
-npm run dev
+npm ci
+npm run dev          # http://localhost:8080 (mode demo, tanpa kredensial)
 ```
 
-Buka [http://localhost:8080](http://localhost:8080) (lihat `scripts.dev` di
-`package.json` untuk port).
+| Perintah | Fungsi |
+|---|---|
+| `npm run dev` / `build` / `start` | server dev, build produksi, jalankan hasil build |
+| `npm run lint` | `next lint` (ESLint `next/core-web-vitals`) |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm test` | Vitest (tests/server, api, assistant, lib) — tanpa internet, memakai fixture |
+| `npm run test:emulator` | uji integrasi dengan Admin SDK asli; butuh Firebase Emulator (lihat di bawah) |
+| `npm run seed -- <uid> [--admin]` | data contoh untuk satu akun (+ peran admin) |
+
+Variabel lingkungan: semua **opsional**, dijelaskan di [`.env.local.example`](./.env.local.example).
+Node ≥ 22.12 (dibutuhkan firebase-admin 14).
 
 ## Struktur
 
 ```
-apps/web/
-├── app/              # Halaman (App Router) + app/api/* (Next.js API Routes)
-├── components/       # Komponen React (components/ui/* = shadcn primitives)
-├── lib/
-│   ├── data/         # Data layer dashboard — lihat bagian di bawah
-│   └── utils.ts      # Helper cn()
-├── hooks/            # Custom hooks
-└── server/           # Kode server-only (mis. server/firebaseAdmin.ts)
+app/
+  (app)/                 halaman berlayout aplikasi (sidebar): dashboard, maps, fields,
+                         disaster-alerts, ecosystem, decision-support, settings, help
+  login/                 login/daftar
+  api/                   route handlers
+components/
+  ui/                    primitif shadcn (Button, Card, Dialog, Select, …)
+  charts/ map/ fields/ decisions/ alerts/ forms/ chat/ landing/
+  app-shell.tsx          sidebar + menu mobile + status login + LandAI
+hooks/                   use-api (fetch + state), use-hotspots, use-location-data, use-chat
+lib/                     aman dipakai klien: tipe (data/types.ts), skema Zod, format, geo,
+                         alerts, recommendations, ndvi, provinces, map/layers
+server/                  HANYA server (`import "server-only"`): sources/, geo/, assistant/,
+                         auth, firestore, cache, rateLimit, http, firebaseAdmin
+tests/                   Vitest + fixture respons penyedia data asli
+scripts/                 seedFirestore.mjs, geo/build_provinces.py
+instrumentation*.ts      pengaturan jaringan Node + pemanasan cache saat server start
 ```
 
-## Data Layer Dashboard (`lib/data/`)
+## Konvensi
 
-Statistik di dashboard utama (`app/dashboard/page.tsx`) tidak fetch API
-langsung dari komponen — semuanya lewat `lib/data/*.ts`:
+- **Tidak ada data mock di UI.** Data harus berasal dari modul di `server/sources/`;
+  kalau sumber gagal, tampilkan `ErrorState` dengan tombol coba-lagi.
+- Setiap tampilan data memakai `SourceNote` (sumber + waktu pengambilan).
+- API route: bungkus dengan `handleRoute`, validasi input dengan skema di `lib/schemas.ts`,
+  data milik user lewat helper `server/firestore.ts` (selalu ber-scope `uid`).
+- Konten dari luar (BMKG, model bahasa) tidak boleh masuk lewat `innerHTML` — pakai
+  `textContent` / elemen React.
+- Warna grafik: satu warna per entitas (`components/charts/chart-utils.tsx`); teks tidak
+  memakai warna data; status = warna + ikon + teks.
+- Komentar & UI berbahasa Indonesia.
 
-- `lib/data/fields.ts` → `getFieldsSummary()`
-- `lib/data/landcover.ts` → `getLandCoverStats()`
-- `lib/data/fireHotspots.ts` → `getFireHotspotCount()`
-- `lib/data/alerts.ts` → `getActiveAlertsCount()`
-- `lib/data/types.ts` → bentuk data bersama (kontrak dengan backend)
+## Memperbarui data batas provinsi
 
-**Saat ini semuanya MOCK** (delay `setTimeout` + data contoh) karena layanan
-GEE (`services/geo`) dan ML masih dalam pengembangan. Komponen dashboard
-memakai hook `hooks/use-dashboard-stat.ts` untuk loading/error state + retry,
-independen per statistik.
+`server/geo/indonesia-provinces.json` dan `lib/province-meta.json` dihasilkan oleh
+`scripts/geo/build_provinces.py` dari geoBoundaries (instruksi di kepala file skrip).
 
-### Cara Menyambungkan ke API Asli Nanti
+## Pengembangan dengan Firebase Emulator
 
-1. Baca kontrak lengkap di [`docs/api-contracts.md`](../../docs/api-contracts.md)
-   — bentuk response tiap endpoint sudah didefinisikan di sana, identik
-   dengan interface di `lib/data/types.ts`.
-2. Ganti isi fungsi di `lib/data/*.ts` terkait dari mock jadi `fetch()` ke
-   endpoint asli (contoh ada di `docs/api-contracts.md`).
-3. **Tidak ada komponen UI yang perlu diubah** — `app/dashboard/page.tsx`
-   dan `hooks/use-dashboard-stat.ts` sudah generik terhadap sumber datanya.
+Tanpa project Firebase sungguhan: lihat bagian "Emulator" di
+[`../../docs/deployment.md`](../../docs/deployment.md). Uji integrasi:
 
-## Halaman Lain
-
-5 halaman lain (`app/fields`, `app/maps`, `app/disaster-alerts`,
-`app/eco-services`, `app/decision-support`) masih memakai pola mock inline
-lama (belum memakai `lib/data/`) — di luar cakupan pekerjaan dashboard ini,
-lihat riwayat commit branch `feature/fe-dashboard` untuk detail audit.
+```bash
+# dari root repo
+npx firebase-tools emulators:exec --config firebase.emulators.json \
+  --only auth,firestore --project demo-ecosentra \
+  "FIREBASE_PROJECT_ID=demo-ecosentra npm run test:emulator --prefix apps/web"
+```
