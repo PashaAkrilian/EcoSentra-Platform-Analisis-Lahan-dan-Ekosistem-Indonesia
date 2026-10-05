@@ -132,6 +132,12 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <AssistantProvider>
       <div className="min-h-screen lg:flex">
+        <a
+          href="#konten"
+          className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[100] focus:rounded-md focus:bg-emerald-700 focus:px-3 focus:py-2 focus:text-sm focus:font-medium focus:text-white"
+        >
+          Lewati ke konten
+        </a>
         {/* Sidebar desktop */}
         <aside className="hidden w-64 shrink-0 flex-col gap-6 border-r border-emerald-900/10 bg-emerald-50/70 p-4 lg:sticky lg:top-0 lg:flex lg:h-screen">
           <div className="px-2 pt-2">

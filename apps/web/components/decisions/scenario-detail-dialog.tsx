@@ -22,7 +22,7 @@ const LEVEL_STYLE: Record<Recommendation["level"], { icon: typeof Info; label: s
 }
 
 /** Konteks data + rekomendasi aturan untuk skenario yang punya lokasi. Hook data dipanggil sekali di sini. */
-function ScenarioContext({ scenario, lat, lng }: { scenario: Scenario; lat: number; lng: number }) {
+function ScenarioContext({ scenario, lat, lng, onAsk }: { scenario: Scenario; lat: number; lng: number; onAsk: () => void }) {
   const data = useLocationData(lat, lng, 1000)
   const { ask } = useAssistantContext()
   const { landcover, ndvi, weather, hotspots } = data
@@ -34,11 +34,14 @@ function ScenarioContext({ scenario, lat, lng }: { scenario: Scenario; lat: numb
   )
   const loading = landcover.isLoading || ndvi.isLoading || weather.isLoading || hotspots.isLoading
 
-  const askAssistant = () =>
+  // Dialog modal menutupi panel LandAI, jadi ditutup dulu supaya jawabannya terlihat & bisa dilanjutkan.
+  const askAssistant = () => {
+    onAsk()
     ask(
       `Saya punya skenario "${scenario.title}" (kategori ${CATEGORY_LABELS[scenario.category].toLowerCase()}, prioritas ${PRIORITY_LABELS[scenario.priority].toLowerCase()}) ` +
         `di koordinat ${lat.toFixed(5)}, ${lng.toFixed(5)}. Berdasarkan data terkini di lokasi itu, apa risikonya dan langkah apa yang Anda sarankan?`,
     )
+  }
 
   return (
     <div className="space-y-5">
@@ -125,7 +128,7 @@ export function ScenarioDetailDialog({ scenario, onOpenChange }: { scenario: Sce
             </dl>
 
             {scenario.location ? (
-              <ScenarioContext scenario={scenario} lat={scenario.location.lat} lng={scenario.location.lng} />
+              <ScenarioContext scenario={scenario} lat={scenario.location.lat} lng={scenario.location.lng} onAsk={() => onOpenChange(false)} />
             ) : (
               <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
                 Skenario ini belum punya lokasi. Ubah skenario dan tambahkan lokasi untuk melihat rekomendasi dan kondisi terkini di sana.
