@@ -1,13 +1,16 @@
 import "server-only"
 import type Anthropic from "@anthropic-ai/sdk"
 import { z } from "zod"
-import type { HotspotRange } from "@/lib/data/types"
+import type { HotspotRange, LandCoverResult, LatLng, NdviResponse, WeatherResponse } from "@/lib/data/types"
 import { formatDateTime } from "@/lib/format"
-import { isInIndonesiaBbox, MAX_BUFFER_METERS, MIN_BUFFER_METERS } from "@/lib/geo"
+import { isInIndonesiaBbox, MAX_BUFFER_METERS, MIN_BUFFER_METERS, nearbyHotspots } from "@/lib/geo"
 import { provinceAreaKm2 } from "@/lib/provinces"
 import { resolveProvince } from "@/lib/province-search"
+import { recommend } from "@/lib/recommendations"
+import { SCENARIO_CATEGORIES } from "@/lib/schemas"
+import { toCompact } from "@/server/export/hotspots"
 import { getEarthquakes } from "@/server/sources/bmkg"
-import { getHotspotDataset, summarizeHotspots } from "@/server/sources/firms"
+import { getHotspotDataset, summarizeHotspots, type HotspotDataset } from "@/server/sources/firms"
 import { analyzeLandCover } from "@/server/sources/landcover"
 import { getNdviSeries } from "@/server/sources/modisNdvi"
 import { getWeather } from "@/server/sources/openMeteo"
@@ -57,27 +60,102 @@ function requireIndonesia(lat: number, lng: number) {
 
 const round = (value: number, digits = 1) => Math.round(value * 10 ** digits) / 10 ** digits
 
+const CONFIDENCE_LABEL = ["rendah", "nominal", "tinggi"] as const
+
+/** Titik api di sekitar sebuah titik: jumlah per radius (5/10/25 km) dan yang terdekat. */
+function summarizeNearbyFire(dataset: HotspotDataset, center: LatLng) {
+  requireIndonesia(center.lat, center.lng)
+  const near = nearbyHotspots(dataset.hotspots.map(toCompact), center)
+  return {
+    center,
+    range: dataset.range,
+    withinKm: { "5": near.within[5] ?? 0, "10": near.within[10] ?? 0, "25": near.within[25] ?? 0 },
+    nearestKm: near.nearestKm === null ? null : round(near.nearestKm, 1),
+    nearest: near.nearest.map((p) => ({
+      km: round(p.km, 1),
+      confidence: CONFIDENCE_LABEL[p.confidence],
+      frpMw: round(p.frpMw, 1),
+      detectedAt: formatDateTime(new Date(p.acquiredAtEpochSec * 1000).toISOString()),
+    })),
+    source: "NASA FIRMS",
+    fetchedAt: formatDateTime(dataset.fetchedAt),
+    note: "Titik api = anomali panas, bukan kebakaran terverifikasi.",
+  }
+}
+
+function summarizeWeather(w: WeatherResponse) {
+  return {
+    location: { lat: w.lat, lng: w.lng },
+    nowWib: formatDateTime(w.current.time),
+    current: {
+      temperatureC: w.current.temperatureC,
+      humidityPct: w.current.humidityPct,
+      precipitationMm: w.current.precipitationMm,
+      windKmh: w.current.windSpeedKmh,
+      description: w.current.description,
+      soilMoistureVolumetricPct: w.current.soilMoisture === null ? null : round(w.current.soilMoisture * 100, 1),
+    },
+    forecast: w.daily.map((d) => ({ date: d.date, description: d.description, minC: d.tempMinC, maxC: d.tempMaxC, rainMm: d.precipitationMm })),
+    source: "Open-Meteo",
+    note: "Kelembapan tanah adalah keluaran model, bukan pengukuran lapangan.",
+  }
+}
+
+function summarizeNdvi(ndvi: NdviResponse) {
+  const cloudy = ndvi.observations.filter((o) => o.quality === "berawan").length
+  return {
+    location: { lat: ndvi.lat, lng: ndvi.lng },
+    latestReliable: ndvi.latest,
+    recentObservations: ndvi.observations.slice(-8),
+    cloudyObservations: cloudy,
+    totalObservations: ndvi.observations.length,
+    source: "NASA MODIS MOD13Q1 via ORNL DAAC",
+    note: "NDVI menggambarkan kehijauan, bukan langsung kesehatan tanaman. Observasi 'berawan' tidak andal.",
+  }
+}
+
+function summarizeLandCover(result: LandCoverResult, lat: number, lng: number, bufferMeters: number) {
+  return {
+    location: { lat, lng },
+    bufferMeters,
+    areaHa: result.areaHa,
+    dominantClass: result.dominantClass,
+    classes: result.classes.slice(0, 7).map((c) => ({ name: c.name, percentage: c.percentage })),
+    dataset: `${result.source.dataset} ${result.source.year}`,
+    source: result.source.name,
+    note: "Klasifikasi otomatis; 'Pepohonan' mencakup hutan alam dan kebun berpohon.",
+  }
+}
+
 export const TOOLS = [
   defineTool({
     name: "get_fire_hotspots",
     label: "Mengambil data titik api",
     description:
       "Jumlah titik api (anomali panas satelit NASA FIRMS VIIRS 375 m) di daratan Indonesia, secara nasional atau per provinsi, " +
-      "dengan rincian provinsi teratas dan jumlah per hari (7 hari). Titik api BUKAN kebakaran terverifikasi. Data hampir real-time.",
-    schema: z.object({
-      province: provinceArg.optional(),
-      range: z.enum(["24h", "48h", "7d"]).default("24h").describe("Rentang waktu, default 24 jam"),
-    }),
+      "dengan rincian provinsi teratas dan jumlah per hari (7 hari). Isi lat dan lng bersamaan untuk pertanyaan tentang satu lokasi: " +
+      "hasil memuat `nearby` (jumlah titik api dalam radius 5/10/25 km dan yang terdekat). Titik api BUKAN kebakaran terverifikasi. Data hampir real-time.",
+    schema: z
+      .object({
+        province: provinceArg.optional(),
+        range: z.enum(["24h", "48h", "7d"]).default("24h").describe("Rentang waktu, default 24 jam"),
+        lat: coordinates.lat.optional(),
+        lng: coordinates.lng.optional(),
+      })
+      .refine((value) => (value.lat === undefined) === (value.lng === undefined), "lat dan lng harus diisi bersamaan"),
     inputSchema: {
       type: "object",
       properties: {
         province: { type: "string", description: "Nama provinsi (opsional). Kosongkan untuk seluruh Indonesia." },
         range: { type: "string", enum: ["24h", "48h", "7d"], description: "Rentang waktu: 24h (default), 48h, atau 7d" },
+        lat: { type: "number", description: `${coordinates.lat.description}. Opsional; isi bersama lng untuk titik api di sekitar lokasi.` },
+        lng: { type: "number", description: `${coordinates.lng.description}. Opsional; isi bersama lat.` },
       },
     },
-    async run({ province, range }) {
+    async run({ province, range, lat, lng }) {
       const resolved = province ? requireProvince(province) : null
       const dataset = await getHotspotDataset(range as HotspotRange)
+      const nearby = lat !== undefined && lng !== undefined ? summarizeNearbyFire(dataset, { lat, lng }) : null
       const hotspots = resolved ? dataset.hotspots.filter((h) => h.provinceIso === resolved.iso) : dataset.hotspots
       const summary = summarizeHotspots({ ...dataset, hotspots })
       const area = resolved ? provinceAreaKm2(resolved.iso) : null
@@ -96,6 +174,7 @@ export const TOOLS = [
           count: d.count,
           ...(all.length >= 3 && (i === 0 || i === all.length - 1) ? { partialDay: true } : {}),
         })),
+        ...(nearby ? { nearby } : {}),
         satellite: summary.source.satellite,
         source: "NASA FIRMS",
         fetchedAt: formatDateTime(summary.source.fetchedAt),
@@ -154,22 +233,7 @@ export const TOOLS = [
     },
     async run({ lat, lng }) {
       requireIndonesia(lat, lng)
-      const w = await getWeather(lat, lng)
-      return {
-        location: { lat: w.lat, lng: w.lng },
-        nowWib: formatDateTime(w.current.time),
-        current: {
-          temperatureC: w.current.temperatureC,
-          humidityPct: w.current.humidityPct,
-          precipitationMm: w.current.precipitationMm,
-          windKmh: w.current.windSpeedKmh,
-          description: w.current.description,
-          soilMoistureVolumetricPct: w.current.soilMoisture === null ? null : round(w.current.soilMoisture * 100, 1),
-        },
-        forecast: w.daily.map((d) => ({ date: d.date, description: d.description, minC: d.tempMinC, maxC: d.tempMaxC, rainMm: d.precipitationMm })),
-        source: "Open-Meteo",
-        note: "Kelembapan tanah adalah keluaran model, bukan pengukuran lapangan.",
-      }
+      return summarizeWeather(await getWeather(lat, lng))
     },
   }),
 
@@ -186,17 +250,7 @@ export const TOOLS = [
     },
     async run({ lat, lng }) {
       requireIndonesia(lat, lng)
-      const ndvi = await getNdviSeries(lat, lng)
-      const cloudy = ndvi.observations.filter((o) => o.quality === "berawan").length
-      return {
-        location: { lat: ndvi.lat, lng: ndvi.lng },
-        latestReliable: ndvi.latest,
-        recentObservations: ndvi.observations.slice(-8),
-        cloudyObservations: cloudy,
-        totalObservations: ndvi.observations.length,
-        source: "NASA MODIS MOD13Q1 via ORNL DAAC",
-        note: "NDVI menggambarkan kehijauan, bukan langsung kesehatan tanaman. Observasi 'berawan' tidak andal.",
-      }
+      return summarizeNdvi(await getNdviSeries(lat, lng))
     },
   }),
 
@@ -219,16 +273,71 @@ export const TOOLS = [
     },
     async run({ lat, lng, buffer_meters }) {
       requireIndonesia(lat, lng)
-      const result = await analyzeLandCover(lat, lng, buffer_meters)
+      return summarizeLandCover(await analyzeLandCover(lat, lng, buffer_meters), lat, lng, buffer_meters)
+    },
+  }),
+
+  defineTool({
+    name: "get_location_briefing",
+    label: "Menyusun ringkasan lokasi",
+    description:
+      "Ringkasan terpadu untuk satu koordinat dalam satu panggilan: titik api di sekitar (24 jam, radius 5/10/25 km), cuaca, NDVI, " +
+      "tutupan lahan radius 1 km, dan rekomendasi berbasis aturan EcoSentra (sama dengan halaman Pendukung Keputusan). " +
+      "Cocok untuk 'bagaimana kondisi/risiko di lokasi ini?'. Bagian yang gagal diambil tercantum di `unavailable`.",
+    schema: z.object({
+      ...coordinates,
+      category: z
+        .enum(SCENARIO_CATEGORIES)
+        .default("kebencanaan")
+        .describe("Sudut pandang rekomendasi: pertanian, kehutanan, kebencanaan (default), atau konservasi"),
+    }),
+    inputSchema: {
+      type: "object",
+      properties: {
+        lat: { type: "number", description: coordinates.lat.description },
+        lng: { type: "number", description: coordinates.lng.description },
+        category: { type: "string", enum: [...SCENARIO_CATEGORIES], description: "Sudut pandang rekomendasi (default kebencanaan)" },
+      },
+      required: ["lat", "lng"],
+    },
+    async run({ lat, lng, category }) {
+      requireIndonesia(lat, lng)
+      const center = { lat, lng }
+      const [dataset, weather, ndvi, landcover] = await Promise.allSettled([
+        getHotspotDataset("24h"),
+        getWeather(lat, lng),
+        getNdviSeries(lat, lng),
+        analyzeLandCover(lat, lng, 1000),
+      ])
+      const value = <T>(result: PromiseSettledResult<T>): T | null => (result.status === "fulfilled" ? result.value : null)
+
+      const unavailable = (
+        [
+          ["titik api", dataset],
+          ["cuaca", weather],
+          ["NDVI", ndvi],
+          ["tutupan lahan", landcover],
+        ] as const
+      )
+        .filter(([, result]) => result.status === "rejected")
+        .map(([name]) => name)
+      if (unavailable.length === 4) throw new Error("semua sumber data (titik api, cuaca, NDVI, tutupan lahan) gagal diambil")
+
+      const fireData = value(dataset)
+      const weatherData = value(weather)
+      const ndviData = value(ndvi)
+      const landCoverData = value(landcover)
+      const nearby = fireData ? nearbyHotspots(fireData.hotspots.map(toCompact), center) : null
       return {
-        location: { lat, lng },
-        bufferMeters: buffer_meters,
-        areaHa: result.areaHa,
-        dominantClass: result.dominantClass,
-        classes: result.classes.slice(0, 7).map((c) => ({ name: c.name, percentage: c.percentage })),
-        dataset: `${result.source.dataset} ${result.source.year}`,
-        source: result.source.name,
-        note: "Klasifikasi otomatis; 'Pepohonan' mencakup hutan alam dan kebun berpohon.",
+        location: center,
+        category,
+        fire: fireData ? summarizeNearbyFire(fireData, center) : null,
+        weather: weatherData ? summarizeWeather(weatherData) : null,
+        ndvi: ndviData ? summarizeNdvi(ndviData) : null,
+        landCover: landCoverData ? summarizeLandCover(landCoverData, lat, lng, 1000) : null,
+        recommendations: recommend({ category, landcover: landCoverData, ndvi: ndviData, weather: weatherData, nearby }),
+        unavailable,
+        note: "Rekomendasi berasal dari aturan sederhana yang transparan (dijelaskan di halaman Bantuan) — indikatif, bukan pengganti kajian lapangan.",
       }
     },
   }),

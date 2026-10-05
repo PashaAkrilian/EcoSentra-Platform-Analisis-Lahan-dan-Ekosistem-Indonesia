@@ -5,6 +5,8 @@ import { HttpError } from "@/server/http"
 export interface AuthUser {
   uid: string
   email: string | null
+  /** Nama tampilan dari akun login (klaim `name` di ID token), bila ada. */
+  name: string | null
   isAdmin: boolean
 }
 
@@ -30,6 +32,7 @@ export async function requireUser(request: Request): Promise<AuthUser> {
     return {
       uid: decoded.uid,
       email: decoded.email ?? null,
+      name: typeof decoded.name === "string" && decoded.name ? decoded.name : null,
       isAdmin: decoded.admin === true,
     }
   } catch (error) {

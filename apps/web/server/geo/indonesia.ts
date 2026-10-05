@@ -76,7 +76,6 @@ export function findProvince(lat: number, lng: number): ProvinceInfo | null {
   return null
 }
 
-
 export function provinceAreaKm2(iso: string): number | null {
   return SHAPES.find((shape) => shape.iso === iso)?.areaKm2 ?? null
 }
@@ -101,8 +100,14 @@ export function provincePolygons(iso: string): number[][][][] | null {
   )
 }
 
-/** GeoJSON FeatureCollection seluruh provinsi, untuk layer batas di peta. */
+let geoJsonCache: ReturnType<typeof buildProvincesGeoJson> | null = null
+
+/** GeoJSON FeatureCollection seluruh provinsi, untuk layer batas di peta (dibangun sekali). */
 export function provincesGeoJson() {
+  return (geoJsonCache ??= buildProvincesGeoJson())
+}
+
+function buildProvincesGeoJson() {
   return {
     type: "FeatureCollection" as const,
     features: SHAPES.map((shape) => {

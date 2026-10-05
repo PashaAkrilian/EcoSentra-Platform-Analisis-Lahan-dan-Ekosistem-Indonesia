@@ -153,6 +153,68 @@ function landCoverText(d: Json, title: string): string {
   return [head, `- ${classes}.`, `_Sumber: ${d.source} — ${d.dataset}. ${d.note}_`].join("\n")
 }
 
+/** Baris ringkas titik api di sekitar sebuah titik (tanpa judul dan sumber). */
+function nearbyFireLines(near: Json): string[] {
+  const within = near.withinKm as Record<string, number>
+  if (within["25"] === 0) return ["- Tidak ada titik api dalam radius 25 km."]
+  const nearest = (near.nearest as Json[])[0]
+  return [
+    `- Dalam 5 km: **${n(within["5"]!)}** · 10 km: **${n(within["10"]!)}** · 25 km: **${n(within["25"]!)}** titik.`,
+    `- Terdekat ${(near.nearestKm as number).toFixed(1)} km (keyakinan ${nearest?.confidence}, terdeteksi ${nearest?.detectedAt}).`,
+  ]
+}
+
+function nearbyFireText(d: Json): string {
+  const near = d.nearby as Json
+  return [
+    `**Titik api di sekitar ${near.center.lat.toFixed(3)}, ${near.center.lng.toFixed(3)} (${RANGE_LABEL[near.range] ?? near.range})**`,
+    ...nearbyFireLines(near),
+    `_Sumber: ${near.source}, diambil ${near.fetchedAt}. Titik api adalah anomali panas satelit, bukan kebakaran terverifikasi._`,
+  ].join("\n")
+}
+
+const LEVEL_LABEL: Record<string, string> = { tindakan: "Perlu tindakan", perhatian: "Perlu perhatian", info: "Informasi" }
+
+/** Ringkasan satu lokasi: titik api sekitar, cuaca, NDVI, tutupan lahan, lalu rekomendasi aturan. */
+function briefingText(d: Json): string {
+  const parts = [`**Ringkasan lokasi ${d.location.lat.toFixed(3)}, ${d.location.lng.toFixed(3)}** — data terkini`]
+  if (d.fire) {
+    parts.push(
+      [
+        `**Titik api di sekitar (${RANGE_LABEL[d.fire.range] ?? d.fire.range})**`,
+        ...nearbyFireLines(d.fire),
+        `_Sumber: ${d.fire.source}, diambil ${d.fire.fetchedAt}. Titik api adalah anomali panas satelit, bukan kebakaran terverifikasi._`,
+      ].join("\n"),
+    )
+  }
+  if (d.weather) parts.push(weatherText(d.weather))
+  if (d.ndvi) parts.push(ndviText(d.ndvi))
+  if (d.landCover) parts.push(landCoverText(d.landCover, "Tutupan lahan di titik terpilih"))
+  if ((d.unavailable as string[]).length > 0) {
+    parts.push(`_Belum tersedia saat ini: ${(d.unavailable as string[]).join(", ")}. Coba lagi sebentar lagi._`)
+  }
+  const recommendations = d.recommendations as Json[]
+  if (recommendations.length > 0) {
+    parts.push(
+      [
+        `**Rekomendasi (aturan EcoSentra, sudut pandang ${d.category})**`,
+        ...recommendations.map((r) => `- **${LEVEL_LABEL[r.level] ?? r.level} — ${r.title}.** ${r.detail}`),
+        `_${d.note}_`,
+      ].join("\n"),
+    )
+  }
+  return parts.join("\n\n")
+}
+
+function inferCategory(q: string): "pertanian" | "kehutanan" | "kebencanaan" | "konservasi" {
+  const explicit = q.match(/kategori (pertanian|kehutanan|kebencanaan|konservasi)/)
+  if (explicit) return explicit[1] as "pertanian" | "kehutanan" | "kebencanaan" | "konservasi"
+  if (/sawah|padi|kebun|tani|pertanian|tanaman/.test(q)) return "pertanian"
+  if (/konservasi|lindung|mangrove|gambut/.test(q)) return "konservasi"
+  if (/hutan|kehutanan/.test(q)) return "kehutanan"
+  return "kebencanaan"
+}
+
 const locationHelp =
   "Untuk pertanyaan ini saya perlu lokasi. Klik sebuah titik di halaman **Peta & Analisis** lalu tanyakan lagi, atau tulis koordinatnya (mis. `-6.57, 107.76`)."
 
@@ -162,7 +224,8 @@ export async function answerWithRules(question: string, context: AssistantContex
   const used: string[] = []
   const parts: string[] = []
   const province = findProvinceInText(question)
-  const location = extractCoordinates(question) ?? context.location ?? null
+  const coordinates = extractCoordinates(question)
+  const location = coordinates ?? context.location ?? null
 
   try {
     const glossary = GLOSSARY.find((g) => g.match.test(q))
@@ -174,8 +237,22 @@ export async function answerWithRules(question: string, context: AssistantContex
     const isNdvi = /ndvi|vegetasi|kehijauan|hijau|kesehatan (tanaman|vegetasi)/.test(q)
     const isLandCover = /tutupan lahan|land cover|landcover|penggunaan lahan|komposisi lahan/.test(q)
 
+    // Pertanyaan tentang satu titik: koordinat tertulis di kalimat, atau "di sini/titik ini" dengan titik terpilih di peta.
+    const aboutPoint = location !== null && (coordinates !== null || /di sini|titik ini|lokasi ini|sekitar sini|titik (yang )?(saya )?(pilih|terpilih)/.test(q))
+    // Minta saran/risiko → ringkasan lengkap walau ada kata kunci data (mis. "karhutla" di judul skenario);
+    // tanpa kata kunci data apa pun ("bagaimana kondisi di sini?") juga ringkasan.
+    const asksAdvice = /risiko|langkah|saran|rekomendasi|bahaya/.test(q)
+    if (aboutPoint && !isQuake && (asksAdvice || !(isFire || isWeather || isNdvi || isLandCover))) {
+      const briefing = await call("get_location_briefing", { ...location, category: inferCategory(q) }, used)
+      return { text: briefingText(briefing), tools: used }
+    }
+
     if (isFire) {
-      parts.push(fireText(await call("get_fire_hotspots", { province: province?.name, range: wantsRange(q) }, used)))
+      parts.push(
+        aboutPoint
+          ? nearbyFireText(await call("get_fire_hotspots", { ...location, range: wantsRange(q) }, used))
+          : fireText(await call("get_fire_hotspots", { province: province?.name, range: wantsRange(q) }, used)),
+      )
     }
     if (isQuake) {
       parts.push(quakeText(await call("get_earthquakes", { kind: /dirasakan|terasa/.test(q) ? "felt" : "m5", limit: 5 }, used)))
@@ -191,7 +268,7 @@ export async function answerWithRules(question: string, context: AssistantContex
       parts.push(location ? ndviText(await call("get_ndvi", location, used)) : locationHelp)
     }
     if (isLandCover) {
-      if (province && !extractCoordinates(question)) {
+      if (province && !coordinates) {
         parts.push(landCoverText(await call("get_province_land_cover", { province: province.name }, used), `Tutupan lahan ${province.name}`))
       } else if (location) {
         parts.push(landCoverText(await call("get_land_cover", { ...location, buffer_meters: 1000 }, used), "Tutupan lahan di titik terpilih"))
