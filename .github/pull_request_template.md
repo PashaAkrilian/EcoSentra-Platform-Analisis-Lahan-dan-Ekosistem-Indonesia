@@ -25,6 +25,8 @@
 ## Checklist
 
 - [ ] Sudah dites secara lokal (manual atau otomatis)
-- [ ] `npm run lint` lolos tanpa error
+- [ ] `npm run lint`, `npm run typecheck`, dan `npm test` lolos (di `apps/web`)
+- [ ] Untuk perubahan Python: `ruff check .` dan `pytest` lolos di folder layanan terkait
 - [ ] Tidak ada model/secret / kredensial / file `.env` yang ter-commit
+- [ ] Perubahan perilaku/API sudah tercermin di dokumentasi (`docs/`, README)
 - [ ] Branch target PR ini sudah benar sesuai alur `develop → staging → main`

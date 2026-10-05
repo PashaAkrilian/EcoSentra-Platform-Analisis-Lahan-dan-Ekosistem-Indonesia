@@ -1,6 +1,6 @@
 // lib/firebaseClient.ts
 import { getApp, getApps, initializeApp } from "firebase/app"
-import { getAuth, type Auth } from "firebase/auth"
+import { connectAuthEmulator, getAuth, type Auth } from "firebase/auth"
 
 // Di browser Firebase hanya dipakai untuk Auth (login). Firestore diakses
 // lewat API routes (lihat firestore.rules), jadi SDK Firestore client tidak
@@ -17,9 +17,19 @@ export const isFirebaseClientConfigured = Boolean(
   firebaseConfig.apiKey && firebaseConfig.authDomain && firebaseConfig.projectId,
 )
 
+// Untuk pengembangan lokal dengan Firebase Emulator (lihat docs/deployment.md):
+// NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 mengarahkan login ke emulator.
+const authEmulatorHost = process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST
+let emulatorConnected = false
+
 /** Instance Firebase Auth, atau `null` kalau env Firebase client belum diisi (mode demo). */
 export function getClientAuth(): Auth | null {
   if (!isFirebaseClientConfigured) return null
   const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
-  return getAuth(app)
+  const auth = getAuth(app)
+  if (authEmulatorHost && !emulatorConnected) {
+    connectAuthEmulator(auth, `http://${authEmulatorHost}`, { disableWarnings: true })
+    emulatorConnected = true
+  }
+  return auth
 }

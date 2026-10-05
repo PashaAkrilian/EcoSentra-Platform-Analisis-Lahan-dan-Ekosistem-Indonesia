@@ -11,6 +11,7 @@ node_modules
 # Local Environment Variables
 .env.local
 .env
+.env.*.local
 
 # Credentials / service account keys — never commit.
 # Aturan utama: taruh file kunci apa pun di dalam folder credentials/.
@@ -32,6 +33,8 @@ credentials/
 venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+.ruff_cache/
 
 # ML experiment weights (experiments/**/model/**) — file besar, jangan masuk Git
 *.pth
@@ -42,6 +45,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+# Log emulator Firebase
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
 
 # Misc
 .DS_Store

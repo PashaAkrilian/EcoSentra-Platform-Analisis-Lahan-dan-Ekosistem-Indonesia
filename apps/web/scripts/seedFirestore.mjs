@@ -20,18 +20,28 @@ if (!uid) {
 }
 
 const { FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY } = process.env
-if (!FIREBASE_PROJECT_ID || !FIREBASE_CLIENT_EMAIL || !FIREBASE_PRIVATE_KEY) {
+// Emulator lokal (FIRESTORE_EMULATOR_HOST / FIREBASE_AUTH_EMULATOR_HOST) tidak butuh service account.
+const usingEmulator = Boolean(process.env.FIRESTORE_EMULATOR_HOST || process.env.FIREBASE_AUTH_EMULATOR_HOST)
+
+if (usingEmulator) {
+  if (!FIREBASE_PROJECT_ID) {
+    console.error("FIREBASE_PROJECT_ID wajib di-set (mis. demo-ecosentra) saat memakai emulator.")
+    process.exit(1)
+  }
+} else if (!FIREBASE_PROJECT_ID || !FIREBASE_CLIENT_EMAIL || !FIREBASE_PRIVATE_KEY) {
   console.error("FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, dan FIREBASE_PRIVATE_KEY wajib di-set di .env.local.")
   process.exit(1)
 }
 
-const app = initializeApp({
-  credential: cert({
-    projectId: FIREBASE_PROJECT_ID,
-    clientEmail: FIREBASE_CLIENT_EMAIL,
-    privateKey: FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-  }),
-})
+const app = usingEmulator
+  ? initializeApp({ projectId: FIREBASE_PROJECT_ID })
+  : initializeApp({
+      credential: cert({
+        projectId: FIREBASE_PROJECT_ID,
+        clientEmail: FIREBASE_CLIENT_EMAIL,
+        privateKey: FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+      }),
+    })
 const db = getFirestore(app)
 const auth = getAuth(app)
 
