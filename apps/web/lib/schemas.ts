@@ -1,6 +1,7 @@
 import { z } from "zod"
 import { INDONESIA_BBOX } from "@/lib/geo"
 import { HOTSPOT_RANGES } from "@/lib/data/types"
+import { resolveProvince } from "@/lib/province-search"
 
 // Skema validasi bersama: dipakai API routes (server) dan form (client),
 // supaya aturan validasi tidak ditulis dua kali.
@@ -35,10 +36,23 @@ export const landCoverQuerySchema = latLngSchema.extend({
     .default(1000),
 })
 
+// Menerima kode ISO ("ID-KT"), nama ("Kalimantan Tengah"), atau singkatan umum ("kalteng");
+// hasilnya selalu kode ISO. Klien API (mis. MCP) tidak perlu punya daftar provinsi sendiri.
 const provinceIso = z
   .string()
-  .regex(/^ID-[A-Z]{2}$/, "province harus kode ISO 3166-2:ID, mis. ID-KT")
   .optional()
+  .transform((value, ctx) => {
+    if (value === undefined || value.trim() === "") return undefined
+    const province = resolveProvince(value)
+    if (!province) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "province tidak dikenali — gunakan nama provinsi atau kode ISO 3166-2:ID, mis. ID-KT",
+      })
+      return z.NEVER
+    }
+    return province.iso
+  })
 
 export const hotspotQuerySchema = z.object({
   range: z.enum(HOTSPOT_RANGES).default("24h"),

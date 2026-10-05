@@ -25,6 +25,10 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  async redirects() {
+    // Halaman "Jasa Ekosistem" (data contoh) digantikan "Profil Ekosistem" berbasis data nyata.
+    return [{ source: "/eco-services", destination: "/ecosystem", permanent: true }]
+  },
   async headers() {
     return [
       {

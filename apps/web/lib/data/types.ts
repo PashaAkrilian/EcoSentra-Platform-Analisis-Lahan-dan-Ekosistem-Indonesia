@@ -46,6 +46,8 @@ export interface ProvinceHotspotCount {
   island: IslandGroup
   count: number
   highConfidence: number
+  /** Rata-rata koordinat titik api di provinsi ini — pusat aktivitas api, untuk tautan peta. */
+  center: LatLng
 }
 
 export interface HotspotSummary {
@@ -253,4 +255,15 @@ export type CompactHotspot = [
 
 export interface HotspotPointsResponse extends HotspotSummary {
   points: CompactHotspot[]
+}
+
+// --- Profil ekosistem provinsi ----------------------------------------------
+
+export interface ProvinceLandCover {
+  source: DataSourceInfo & { dataset: string; year: number; sampleResolutionM: number }
+  iso: string
+  name: string
+  island: IslandGroup
+  areaKm2: number
+  classes: LandCoverClass[]
 }

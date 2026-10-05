@@ -2,7 +2,8 @@ import { NextResponse } from "next/server"
 import type { UserProfile } from "@/lib/data/types"
 import { profileInputSchema } from "@/lib/schemas"
 import { requireUser, type AuthUser } from "@/server/auth"
-import { FieldValue, getDb } from "@/server/firebaseAdmin"
+import { FieldValue, getAdminAuth, getDb } from "@/server/firebaseAdmin"
+import { deleteAllOwned } from "@/server/firestore"
 import { handleRoute, readJsonBody } from "@/server/http"
 
 // Dokumen profil disimpan di users/{uid}. Role admin TIDAK disimpan di sini
@@ -32,5 +33,23 @@ export async function PUT(request: Request) {
     const ref = getDb().collection("users").doc(user.uid)
     await ref.set({ ...input, email: user.email, updatedAt: FieldValue.serverTimestamp() }, { merge: true })
     return NextResponse.json(toProfile(user, (await ref.get()).data()))
+  })
+}
+
+/**
+ * Hapus akun beserta SEMUA data milik user (lahan, riwayat analisis, skenario,
+ * profil) lalu hapus akun login. Tidak bisa dibatalkan. Peringatan publik
+ * yang pernah diterbitkan admin tetap ada (konten publik, bukan data pribadi).
+ */
+export async function DELETE(request: Request) {
+  return handleRoute(async () => {
+    const user = await requireUser(request)
+    // Urutan: data dulu, akun login terakhir — kalau gagal di tengah, user masih bisa login & mencoba lagi.
+    for (const collection of ["landCoverSnapshots", "decisions", "fields"] as const) {
+      await deleteAllOwned(collection, user.uid)
+    }
+    await getDb().collection("users").doc(user.uid).delete()
+    await getAdminAuth().deleteUser(user.uid)
+    return new NextResponse(null, { status: 204 })
   })
 }

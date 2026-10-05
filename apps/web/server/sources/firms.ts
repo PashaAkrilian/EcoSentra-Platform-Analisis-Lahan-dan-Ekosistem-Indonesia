@@ -28,7 +28,7 @@ const SATELLITES = {
 type SatelliteKey = keyof typeof SATELLITES
 
 const CACHE_TTL_MS = 15 * 60 * 1000 // FIRMS NRT diperbarui tiap ~3 jam
-const FETCH_TIMEOUT_MS = 45_000
+const FETCH_TIMEOUT_MS = 120_000 // file FIRMS 1-6 MB; dari Indonesia unduhan bisa puluhan detik
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000
 
 function satelliteKey(): SatelliteKey {
@@ -147,7 +147,7 @@ export function toWibDate(isoUtc: string): string {
 }
 
 export function summarizeHotspots(dataset: HotspotDataset): HotspotSummary {
-  const byProvince = new Map<string, ProvinceHotspotCount>()
+  const byProvince = new Map<string, ProvinceHotspotCount & { sumLat: number; sumLng: number }>()
   const byIsland = new Map<IslandGroup, number>()
   const byDay = new Map<string, number>()
   let highConfidence = 0
@@ -159,8 +159,13 @@ export function summarizeHotspots(dataset: HotspotDataset): HotspotSummary {
       island: h.island,
       count: 0,
       highConfidence: 0,
+      center: { lat: 0, lng: 0 },
+      sumLat: 0,
+      sumLng: 0,
     }
     province.count++
+    province.sumLat += h.lat
+    province.sumLng += h.lng
     if (h.confidence === "high") {
       province.highConfidence++
       highConfidence++
@@ -184,7 +189,12 @@ export function summarizeHotspots(dataset: HotspotDataset): HotspotSummary {
     total: dataset.hotspots.length,
     highConfidence,
     latestAcquiredAt: dataset.hotspots[0]?.acquiredAt ?? null,
-    byProvince: [...byProvince.values()].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
+    byProvince: [...byProvince.values()]
+      .map(({ sumLat, sumLng, ...p }) => ({
+        ...p,
+        center: { lat: Math.round((sumLat / p.count) * 1e4) / 1e4, lng: Math.round((sumLng / p.count) * 1e4) / 1e4 },
+      }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)),
     byIsland: islandOrder.map((island) => ({ island, count: byIsland.get(island) ?? 0 })),
     byDay: [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, count]) => ({ date, count })),
   }
