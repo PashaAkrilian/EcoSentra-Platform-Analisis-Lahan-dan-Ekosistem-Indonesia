@@ -1,0 +1,157 @@
+import { z } from "zod"
+import { INDONESIA_BBOX } from "@/lib/geo"
+import { HOTSPOT_RANGES } from "@/lib/data/types"
+
+// Skema validasi bersama: dipakai API routes (server) dan form (client),
+// supaya aturan validasi tidak ditulis dua kali.
+
+const latitude = z.coerce
+  .number({ invalid_type_error: "lat harus berupa angka" })
+  .min(INDONESIA_BBOX.minLat, "Koordinat harus berada di wilayah Indonesia")
+  .max(INDONESIA_BBOX.maxLat, "Koordinat harus berada di wilayah Indonesia")
+
+const longitude = z.coerce
+  .number({ invalid_type_error: "lng harus berupa angka" })
+  .min(INDONESIA_BBOX.minLng, "Koordinat harus berada di wilayah Indonesia")
+  .max(INDONESIA_BBOX.maxLng, "Koordinat harus berada di wilayah Indonesia")
+
+export const latLngSchema = z.object({ lat: latitude, lng: longitude })
+
+const isoDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Format tanggal harus YYYY-MM-DD")
+  .refine((value) => !Number.isNaN(Date.parse(value)), "Tanggal tidak valid")
+
+// --- Query parameter API data publik -----------------------------------------
+
+export const coordinateQuerySchema = latLngSchema
+
+export const landCoverQuerySchema = latLngSchema.extend({
+  buffer: z.coerce
+    .number()
+    .int("buffer harus bilangan bulat (meter)")
+    .min(100, "buffer minimal 100 m")
+    .max(50_000, "buffer maksimal 50.000 m")
+    .default(1000),
+})
+
+const provinceIso = z
+  .string()
+  .regex(/^ID-[A-Z]{2}$/, "province harus kode ISO 3166-2:ID, mis. ID-KT")
+  .optional()
+
+export const hotspotQuerySchema = z.object({
+  range: z.enum(HOTSPOT_RANGES).default("24h"),
+  province: provinceIso,
+})
+
+export const hotspotExportQuerySchema = hotspotQuerySchema.extend({
+  format: z.enum(["geojson", "csv", "kml"]).default("geojson"),
+})
+
+// --- Dokumen Firestore milik user ---------------------------------------------
+
+export const CROP_TYPES = [
+  "Padi",
+  "Jagung",
+  "Kedelai",
+  "Kelapa sawit",
+  "Karet",
+  "Kopi",
+  "Kakao",
+  "Tebu",
+  "Hortikultura",
+  "Hutan tanaman",
+  "Lainnya",
+] as const
+
+export const fieldInputSchema = z
+  .object({
+    name: z.string().trim().min(1, "Nama lahan wajib diisi").max(100),
+    cropType: z.enum(CROP_TYPES, { errorMap: () => ({ message: "Jenis tanaman tidak dikenal" }) }),
+    areaHa: z.coerce.number().positive("Luas harus lebih dari 0").max(1_000_000, "Luas maksimal 1.000.000 ha"),
+    plantingDate: isoDate.nullable().default(null),
+    location: latLngSchema,
+    notes: z.string().trim().max(1000).default(""),
+  })
+  .strict()
+
+export const fieldUpdateSchema = fieldInputSchema
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, "Tidak ada field yang diubah")
+
+export const SCENARIO_CATEGORIES = ["pertanian", "kehutanan", "kebencanaan", "konservasi"] as const
+export const SCENARIO_STATUSES = ["draf", "berjalan", "selesai"] as const
+export const SCENARIO_PRIORITIES = ["rendah", "sedang", "tinggi"] as const
+
+export const scenarioInputSchema = z
+  .object({
+    title: z.string().trim().min(3, "Judul minimal 3 karakter").max(150),
+    description: z.string().trim().max(2000).default(""),
+    category: z.enum(SCENARIO_CATEGORIES),
+    status: z.enum(SCENARIO_STATUSES).default("draf"),
+    priority: z.enum(SCENARIO_PRIORITIES).default("sedang"),
+    location: latLngSchema.nullable().default(null),
+    deadline: isoDate.nullable().default(null),
+  })
+  .strict()
+
+export const scenarioUpdateSchema = scenarioInputSchema
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, "Tidak ada field yang diubah")
+
+export const ALERT_TYPES = ["kebakaran", "banjir", "kekeringan", "longsor", "gempa", "lainnya"] as const
+export const ALERT_SEVERITIES = ["rendah", "sedang", "tinggi", "kritis"] as const
+export const ALERT_STATUSES = ["aktif", "dipantau", "selesai"] as const
+
+export const alertInputSchema = z
+  .object({
+    type: z.enum(ALERT_TYPES),
+    severity: z.enum(ALERT_SEVERITIES),
+    title: z.string().trim().min(3).max(150),
+    description: z.string().trim().max(2000).default(""),
+    location: latLngSchema,
+    regionName: z.string().trim().min(1).max(150),
+    status: z.enum(ALERT_STATUSES).default("aktif"),
+  })
+  .strict()
+
+export const alertUpdateSchema = alertInputSchema
+  .partial()
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, "Tidak ada field yang diubah")
+
+export const profileInputSchema = z
+  .object({
+    displayName: z.string().trim().min(1, "Nama wajib diisi").max(80),
+    organization: z.string().trim().max(120).default(""),
+  })
+  .strict()
+
+// --- LandAI -----------------------------------------------------------------
+
+export const chatRequestSchema = z.object({
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant"]),
+        content: z.string().trim().min(1).max(4000),
+      }),
+    )
+    .min(1)
+    .max(30)
+    .refine((messages) => messages.at(-1)?.role === "user", "Pesan terakhir harus dari user"),
+  /** Konteks opsional dari halaman, mis. titik yang sedang dipilih di peta. */
+  context: z
+    .object({
+      location: latLngSchema.optional(),
+    })
+    .optional(),
+})
+
+/** Ambil query string sebagai objek biasa untuk divalidasi Zod. */
+export function searchParamsToObject(searchParams: URLSearchParams): Record<string, string> {
+  return Object.fromEntries(searchParams.entries())
+}

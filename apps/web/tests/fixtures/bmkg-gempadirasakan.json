@@ -1,0 +1,42 @@
+{
+ "Infogempa": {
+  "gempa": [
+   {
+    "Tanggal": "05 Okt 2026",
+    "Jam": "19:46:17 WIB",
+    "DateTime": "2026-10-05T12:46:17+00:00",
+    "Coordinates": "-8.52,122.01",
+    "Lintang": "8.52 LS",
+    "Bujur": "122.01 BT",
+    "Magnitude": "3.1",
+    "Kedalaman": "12 km",
+    "Wilayah": "Pusat gempa berada di darat 24 km baratlaut Maumere, Sikka",
+    "Dirasakan": "II-III Sikka"
+   },
+   {
+    "Tanggal": "05 Okt 2026",
+    "Jam": "19:17:20 WIB",
+    "DateTime": "2026-10-05T12:17:20+00:00",
+    "Coordinates": "-9.77,118.94",
+    "Lintang": "9.77 LS",
+    "Bujur": "118.94 BT",
+    "Magnitude": "4.3",
+    "Kedalaman": "16 km",
+    "Wilayah": "Pusat gempa berada di laut 20 km selatan Kodi, Sumba Barat Daya",
+    "Dirasakan": "III-IV Kab. Sumba Barat Daya, III Kab. Bima"
+   },
+   {
+    "Tanggal": "05 Okt 2026",
+    "Jam": "09:16:32 WIB",
+    "DateTime": "2026-10-05T02:16:32+00:00",
+    "Coordinates": "-9.13,113.07",
+    "Lintang": "9.13 LS",
+    "Bujur": "113.07 BT",
+    "Magnitude": "4.6",
+    "Kedalaman": "4 km",
+    "Wilayah": "Pusat gempa berada di laut 112 km selatan Lumajang",
+    "Dirasakan": "III Lumajang, II Blitar, II Malang, II Jember"
+   }
+  ]
+ }
+}

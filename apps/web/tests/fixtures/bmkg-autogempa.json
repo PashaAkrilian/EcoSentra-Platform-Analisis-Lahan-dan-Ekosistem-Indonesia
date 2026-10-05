@@ -1,0 +1,18 @@
+{
+ "Infogempa": {
+  "gempa": {
+   "Tanggal": "05 Okt 2026",
+   "Jam": "19:46:17 WIB",
+   "DateTime": "2026-10-05T12:46:17+00:00",
+   "Coordinates": "-8.52,122.01",
+   "Lintang": "8.52 LS",
+   "Bujur": "122.01 BT",
+   "Magnitude": "3.1",
+   "Kedalaman": "12 km",
+   "Wilayah": "Pusat gempa berada di darat 24 km baratlaut Maumere, Sikka",
+   "Potensi": "Gempa ini dirasakan untuk diteruskan pada masyarakat",
+   "Dirasakan": "II-III Sikka",
+   "Shakemap": "20261005194617.mmi.jpg"
+  }
+ }
+}
