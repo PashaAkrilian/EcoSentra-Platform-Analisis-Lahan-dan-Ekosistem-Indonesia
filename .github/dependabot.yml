@@ -1,0 +1,43 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /apps/web
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Next.js 16 / ESLint 9 butuh migrasi terencana (`next lint` dihapus di Next 16).
+      - dependency-name: next
+        update-types: [version-update:semver-major]
+      - dependency-name: eslint
+        update-types: [version-update:semver-major]
+      - dependency-name: eslint-config-next
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: pip
+    directory: /services/geo
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: pip
+    directory: /services/mcp
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /services/geo
+    schedule:
+      interval: monthly
+
+  - package-ecosystem: docker
+    directory: /services/mcp
+    schedule:
+      interval: monthly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

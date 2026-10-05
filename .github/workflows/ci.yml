@@ -6,10 +6,19 @@ on:
   pull_request:
     branches: [develop, staging, main]
 
+# Batalkan run lama di branch/PR yang sama saat ada push baru.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
-  frontend:
-    name: Frontend Lint & Build
+  web:
+    name: Web — lint, type-check, test, build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: apps/web
@@ -20,7 +29,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
 
@@ -28,34 +37,109 @@ jobs:
         run: npm ci
 
       - name: Lint
-        # Non-blocking untuk sekarang: repo ini punya beberapa error ESLint
-        # lama (mis. react/no-unescaped-entities) yang belum diperbaiki dan
-        # bukan bagian dari setup CI ini. Tetap dijalankan supaya kelihatan
-        # di log, tapi tidak menggagalkan pipeline.
         run: npm run lint
-        continue-on-error: true
 
       - name: Type-check
-        # Non-blocking untuk sekarang: ada error TypeScript lama di
-        # components/ui/chart.tsx (kemungkinan mismatch versi recharts) yang
-        # sengaja disembunyikan lewat next.config.mjs (typescript.ignoreBuildErrors).
-        # Dijalankan supaya kelihatan di log, tidak menggagalkan pipeline.
-        run: npx tsc --noEmit
-        continue-on-error: true
+        run: npm run typecheck
 
+      - name: Test
+        run: npm test
+
+      # Build TIDAK membutuhkan kredensial Firebase/Anthropic: aplikasi dibangun
+      # dalam mode demo (Firebase Admin diinisialisasi malas, saat dibutuhkan).
       - name: Build
         run: npm run build
-        env:
-          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
-          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
-          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
 
-      # TODO: tambahkan step test di sini setelah Fase 4 (testing) selesai.
-      # Belum ada test suite di apps/web sama sekali saat ini.
+      # Hanya gagal untuk kerentanan KRITIS pada dependency produksi; temuan lain
+      # dipantau lewat Dependabot (sebagian berada di dependency transitif yang
+      # belum punya perbaikan upstream).
+      - name: Audit dependency produksi
+        run: npm audit --omit=dev --audit-level=critical
 
-  # services/ml, services/geo, services/mcp BELUM ditambahkan sebagai job:
-  # belum ada requirements.txt/kode yang bisa di-install & di-build di branch
-  # `develop`. Kode masing-masing sudah ada di feature branch terpisah
-  # (feature/ml-segformer-run-01, feature/be-landcover-gee,
-  # feature/mcp-landcover) tapi belum merge. Tambahkan job baru di sini
-  # setelah salah satunya merge - lihat docs/ci-cd.md untuk contoh polanya.
+  web-emulator:
+    name: Web — integrasi Firebase Emulator (Admin SDK asli)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      # Emulator Firestore berjalan di JVM.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Cache binary emulator
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/firebase/emulators
+          key: firebase-emulators-${{ runner.os }}-v1
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: apps/web
+
+      # Menjalankan emulator Auth + Firestore (dengan firestore.rules repo), mengeksekusi uji,
+      # lalu mematikannya. Memverifikasi token, kepemilikan data, kaskade hapus, claim admin,
+      # hapus akun, dan bahwa aturan menolak akses klien langsung.
+      # Memakai firebase.emulators.json (bukan firebase.json): blok hosting.source di sana
+      # membuat firebase-tools mencoba membangun Next.js setiap emulator dijalankan.
+      - name: Uji integrasi
+        run: >
+          npx --yes firebase-tools@15 emulators:exec --config firebase.emulators.json
+          --only auth,firestore --project demo-ecosentra
+          "FIREBASE_PROJECT_ID=demo-ecosentra npm run test:emulator --prefix apps/web"
+
+  geo:
+    name: services/geo — ruff & pytest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: services/geo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/geo/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: pytest -q
+
+  mcp:
+    name: services/mcp — ruff & pytest (termasuk uji protokol stdio)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: services/mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/mcp/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: pytest -q
+
+  docker:
+    name: Docker — build image services
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        service: [geo, mcp]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build services/${{ matrix.service }}
+        run: docker build --tag ecosentra-${{ matrix.service }}:ci services/${{ matrix.service }}

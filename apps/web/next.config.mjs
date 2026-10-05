@@ -1,5 +1,9 @@
 const isDev = process.env.NODE_ENV !== "production"
 
+// Firebase Auth Emulator untuk pengembangan lokal (lihat docs/deployment.md): kalau host-nya
+// di-set, izinkan koneksi ke host itu saja. Nilai NEXT_PUBLIC_* ini ikut tertanam saat build.
+const authEmulator = process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST
+
 // Content-Security-Policy: halaman ini memuat tile peta dari banyak server
 // (Esri, OpenStreetMap, OpenTopoMap, NASA GIBS) -> img-src mengizinkan https:.
 // Firebase Auth butuh googleapis (REST) & iframe di *.firebaseapp.com untuk
@@ -11,7 +15,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
-  "connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com",
+  `connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com${authEmulator ? ` http://${authEmulator}` : ""}`,
   "frame-src https://*.firebaseapp.com https://accounts.google.com",
   "object-src 'none'",
   "base-uri 'self'",
