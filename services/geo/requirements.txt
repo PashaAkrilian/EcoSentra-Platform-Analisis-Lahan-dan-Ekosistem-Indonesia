@@ -1,5 +1,5 @@
-earthengine-api
-python-dotenv
-fastapi
-uvicorn[standard]
-slowapi
+earthengine-api>=0.1.400,<2
+python-dotenv>=1.0,<2
+fastapi>=0.115,<1
+uvicorn[standard]>=0.30,<1
+slowapi>=0.1.9,<1

@@ -3,5 +3,9 @@ __pycache__/
 *.pyc
 .env
 credentials/
-test_gee.py
+check_gee.py
+tests/
+requirements-dev.txt
+pytest.ini
+ruff.toml
 README.md

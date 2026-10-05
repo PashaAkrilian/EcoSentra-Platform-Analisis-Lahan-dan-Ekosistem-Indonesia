@@ -1,8 +1,6 @@
-"""Script sementara untuk memverifikasi koneksi ke Google Earth Engine.
+"""Cek koneksi ke Google Earth Engine memakai kredensial di .env.
 
-Jalankan manual: python test_gee.py
-Hapus/abaikan setelah TAHAP 2 selesai — logika asli akan pindah ke
-gee_service.py (TAHAP 4).
+Jalankan manual: python check_gee.py   (mencetak "GEE OK" kalau berhasil)
 """
 import os
 import sys
@@ -45,7 +43,7 @@ def main() -> int:
         if result != 2:
             print(f"ERROR: Respons GEE tidak sesuai ekspektasi: {result}")
             return 1
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - skrip diagnostik: tampilkan apa pun penyebabnya
         print(f"ERROR: Gagal terhubung ke Google Earth Engine: {exc}")
         return 1
 
