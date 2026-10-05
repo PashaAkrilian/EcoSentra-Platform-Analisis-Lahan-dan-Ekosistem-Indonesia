@@ -1,34 +1,41 @@
-// app/api/alerts/route.ts
-import { NextResponse } from 'next/server';
-import { firestore, FieldValue } from '@/server/firebaseAdmin';
-import { parseJsonBody } from '@/lib/validation';
+import { NextResponse } from "next/server"
+import type { Alert } from "@/lib/data/types"
+import { alertInputSchema } from "@/lib/schemas"
+import { requireAdmin } from "@/server/auth"
+import { FieldValue, getDb, isFirebaseAdminConfigured } from "@/server/firebaseAdmin"
+import { serializeDoc } from "@/server/firestore"
+import { handleRoute, readJsonBody } from "@/server/http"
 
+/**
+ * Peringatan yang dikurasi admin (melengkapi peringatan otomatis dari
+ * BMKG & FIRMS di halaman Peringatan Bencana). Baca: publik. Tulis: admin.
+ * Kalau Firebase belum dikonfigurasi, GET tetap 200 dengan daftar kosong
+ * supaya halaman publik tetap jalan.
+ */
 export async function GET() {
-  try {
-    const alertsSnapshot = await firestore.collection('alerts').get();
-    const alerts = alertsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-    return NextResponse.json(alerts);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'An unknown error occurred';
-    return NextResponse.json({ message }, { status: 500 });
-  }
+  return handleRoute(async () => {
+    if (!isFirebaseAdminConfigured()) {
+      return NextResponse.json({ configured: false, alerts: [] })
+    }
+    const snapshot = await getDb().collection("alerts").orderBy("createdAt", "desc").limit(100).get()
+    const alerts = snapshot.docs.map((doc) => {
+      const { createdBy: _createdBy, ...alert } = serializeDoc<Alert & { createdBy?: string }>(doc)
+      return alert
+    })
+    return NextResponse.json(
+      { configured: true, alerts },
+      { headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300" } },
+    )
+  })
 }
 
 export async function POST(request: Request) {
-  const parsed = await parseJsonBody(request);
-  if (!parsed.success) {
-    return NextResponse.json({ message: parsed.message }, { status: parsed.status });
-  }
-
-  try {
-    const newAlert = {
-      ...parsed.data,
-      createdAt: FieldValue.serverTimestamp(),
-    };
-    const docRef = await firestore.collection('alerts').add(newAlert);
-    return NextResponse.json({ id: docRef.id, ...newAlert }, { status: 201 });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'An unknown error occurred';
-    return NextResponse.json({ message }, { status: 500 });
-  }
+  return handleRoute(async () => {
+    const admin = await requireAdmin(request)
+    const input = alertInputSchema.parse(await readJsonBody(request))
+    const ref = await getDb()
+      .collection("alerts")
+      .add({ ...input, createdBy: admin.uid, createdAt: FieldValue.serverTimestamp() })
+    return NextResponse.json(serializeDoc<Alert>(await ref.get()), { status: 201 })
+  })
 }

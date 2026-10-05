@@ -1,14 +1,22 @@
-// app/api/healthcheck/route.ts
-import { NextResponse } from 'next/server';
-import { firestore } from '@/server/firebaseAdmin';
+import { NextResponse } from "next/server"
+import { isFirebaseAdminConfigured } from "@/server/firebaseAdmin"
 
+/**
+ * Status integrasi (tanpa membocorkan nilai rahasia apa pun) — dipakai
+ * halaman Pengaturan dan untuk monitoring uptime.
+ */
 export async function GET() {
-  try {
-    const collections = await firestore.listCollections();
-    const collectionIds = collections.map((col) => col.id);
-    return NextResponse.json({ status: 'ok', collections: collectionIds });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'An unknown error occurred';
-    return NextResponse.json({ status: 'error', message }, { status: 500 });
-  }
+  return NextResponse.json(
+    {
+      status: "ok",
+      time: new Date().toISOString(),
+      integrations: {
+        firebaseAdmin: isFirebaseAdminConfigured(),
+        firebaseAuthClient: Boolean(process.env.NEXT_PUBLIC_FIREBASE_API_KEY),
+        geoService: Boolean(process.env.GEO_SERVICE_URL),
+        llm: Boolean(process.env.ANTHROPIC_API_KEY),
+      },
+    },
+    { headers: { "Cache-Control": "no-store" } },
+  )
 }
