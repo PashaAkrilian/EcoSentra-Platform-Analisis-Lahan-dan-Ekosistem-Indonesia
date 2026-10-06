@@ -33,7 +33,7 @@
     "react": "^19",
     "react-dom": "^19",
     "tailwind-merge": "^2.5.5",
-    "zod": "^3.24.1"
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@types/leaflet": "^1.9.22",
