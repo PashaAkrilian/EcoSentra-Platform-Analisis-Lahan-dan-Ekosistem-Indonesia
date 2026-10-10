@@ -32,7 +32,7 @@
     "next": "15.5.27",
     "react": "^19",
     "react-dom": "^19",
-    "tailwind-merge": "^2.5.5",
+    "tailwind-merge": "^3.7.0",
     "zod": "^3.24.1"
   },
   "overrides": {
